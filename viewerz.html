@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<style>
+
+body {
+	margin: 0;
+}
+
+#viz { 
+}
+
+#viz > div {
+	position: absolute;
+	height: 100vh;
+}
+
+.high {
+	background: blue;
+}
+
+#overlay, #overlay2 {
+	display: inline-block;
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	width: 72000px;
+	background-size: 20px auto;
+	background-position: 6387px 0;
+}
+
+#overlay {
+	background-image: linear-gradient(to right, red, transparent 20%);
+	background-size: 220px auto;
+}
+
+#overlay2 {
+	background-image: linear-gradient(to right, green, transparent 20%);
+	background-size: 20px auto;
+}
+
+</style>
+<div id="viz"></div>
+<div id="overlay"></div>
+<div id="overlay2"></div>
+<script src="dataz.json"></script>
+<script>
+
+for (let i = 0; i < dataz.length - 1; i++) {
+	const width = dataz[i+1].ts - dataz[i].ts;
+	const el = document.createElement('div');
+	el.style.left = `${dataz[i].ts / 100}px`;
+	el.style.width = `${width / 100}px`;
+	if (dataz[i].val)
+		el.classList.add('high');
+	viz.appendChild(el);
+}
+
+let packets = [];
+let firstb = false;
+
+for (let i = 38; i < dataz.length; i++) {
+	let count = Math.round((dataz[i].ts - dataz[i-1].ts) / 2000);
+	if (count > 200) {
+		let tdelta = dataz[i].ts - dataz[i-1].ts;
+		console.log((dataz[i].ts - dataz[i-1].ts));
+		packets.push([]);
+		firstb = true;
+		continue;
+	}
+	if (firstb) {
+		if (count != 1) {
+			throw new Excecption("bad first bit");
+		}
+		firstb = false;
+		continue;
+	}
+	for (let j = 0; j < count; j++) {
+		packets[packets.length-1].push(dataz[i-1].val);
+	}
+}
+
+let bytepackets = packets.map(packet => {
+	return packet.reduce((acc, x, i) => {
+    let pos = i % 8;
+    if (pos == 0)
+        acc.push(0);
+    acc[acc.length-1] += x << (8 - pos);
+	return acc;
+}, [])
+});
+
+</script>
