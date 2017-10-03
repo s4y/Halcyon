@@ -12,13 +12,19 @@
 #define xstr(s) str(s)
 #define str(s) #s
 
-#define RX 7
-#define TX 8
+#define RX 23
+#define TX 24
 
 #define BIT_DUR (2000)
-#define SPACE_DUR (BIT_DUR * 200)
+#define SHORT_SPACE_DUR (BIT_DUR * 20)
+#define LONG_SPACE_DUR (BIT_DUR * 200)
 
 #define GPIO_PATH(PIN, NODE) "/sys/class/gpio/gpio" str(PIN) "/" NODE
+
+// https://stackoverflow.com/questions/44116820/
+static int iround(int x, int multiple) {
+    return (x + (multiple / 2)) / multiple * multiple;
+}
 
 static uint64_t ustime() {
 	static struct timespec start = {0, 0};
@@ -53,6 +59,83 @@ static void wait_pin(int fd) {
 	poll(&pfd, 1, -1);
 }
 
+typedef enum {
+	INPUT_STATE_WAIT_FRAME,
+	INPUT_STATE_HAVE_BYTE,
+	INPUT_STATE_WANT_STOP_BIT,
+	INPUT_STATE_WANT_PARITY_BIT,
+	INPUT_STATE_BIT_7,
+	INPUT_STATE_BIT_6,
+	INPUT_STATE_BIT_5,
+	INPUT_STATE_BIT_4,
+	INPUT_STATE_BIT_3,
+	INPUT_STATE_BIT_2,
+	INPUT_STATE_BIT_1,
+	INPUT_STATE_BIT_0,
+} input_state;
+
+typedef struct {
+	input_state state;
+	int newframe;
+	char byte;
+	const char* err;
+} input_context;
+
+void input_machine(input_context* context, int lev) {
+	switch (context->state) {
+		case INPUT_STATE_WAIT_FRAME:
+			break;
+		case INPUT_STATE_HAVE_BYTE:
+			if (!lev) {
+				context->err = "Definitely expected a start bit.";
+				goto fail;
+			}
+			context->byte = 0;
+			context->state = INPUT_STATE_BIT_0;
+			break;
+		case INPUT_STATE_WANT_STOP_BIT:
+		case INPUT_STATE_WANT_PARITY_BIT:
+			context->state--;
+			// TODO
+			break;
+		case INPUT_STATE_BIT_7:
+		case INPUT_STATE_BIT_6:
+		case INPUT_STATE_BIT_5:
+		case INPUT_STATE_BIT_4:
+		case INPUT_STATE_BIT_3:
+		case INPUT_STATE_BIT_2:
+		case INPUT_STATE_BIT_1:
+		case INPUT_STATE_BIT_0:
+			context->byte <<= 1;
+			context->byte |= lev;
+			context->state--;
+			break;
+	}
+	return;
+fail:
+	context->state = INPUT_STATE_WAIT_FRAME;
+}
+
+void input(input_context* context, int pin, int fd) {
+	const uint64_t start = ustime();
+	wait_pin(fd);
+	const uint64_t dur = ustime() - start;
+	const int lev = bcm2835_gpio_lev(pin);
+
+	//fprintf(stderr, "read %u after %llu\n", bcm2835_gpio_lev(pin), dur);
+
+	context->err = NULL;
+
+	if (dur > SHORT_SPACE_DUR) {
+		context->state = INPUT_STATE_HAVE_BYTE;
+		context->newframe = (dur > LONG_SPACE_DUR) ? 2 : 1;
+	} else {
+		const int bits = iround(dur, BIT_DUR) / BIT_DUR;
+		for (int i = 0; i < bits; i++)
+			input_machine(context, !lev);
+	}
+}
+
 int main() {
 
 	if (!bcm2835_init())
@@ -84,12 +167,28 @@ int main() {
 		mlockall(MCL_CURRENT | MCL_FUTURE);
 	}
 
+	input_context ctx = {0};
+	for (;;) {
+		input(&ctx, RX, rx);
+		if (ctx.err) {
+			fprintf(stderr, "state: %u, byte: %02x, err: %s\n", ctx.state, ctx.byte, ctx.err);
+		}
+		if (ctx.newframe == 2)
+			printf("\n");
+		else if (ctx.newframe == 1)
+			printf("| ");
+		ctx.newframe = 0;
+		if (ctx.state == INPUT_STATE_HAVE_BYTE)
+			printf("%02x ", ctx.byte);
+	}
+
+#if 0
 	uint64_t last_time = 0;
 
 	for (;;) {
 		printf("\n");
 
-		bcm2835_gpio_clr(TX);
+		//bcm2835_gpio_clr(TX);
 
 		// Wait for a fresh packet.
 		for (uint64_t last = 0, now = 0;; last = now) {
@@ -136,7 +235,7 @@ int main() {
 #endif
 		//usleep(BIT_DUR * 0.0);
 
-		bcm2835_gpio_set(TX);
+		//bcm2835_gpio_set(TX);
 
 		usleep(BIT_DUR);
 
@@ -217,5 +316,6 @@ int main() {
 		//bcm2835_gpio_set_eds(RX);
 #endif
 	}
+#endif
 #endif
 }
