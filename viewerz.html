@@ -35,7 +35,7 @@ body {
 
 #overlay2 {
 	background-image: linear-gradient(to right, green 20%, transparent 20%);
-	background-size: 22px auto;
+	background-size: 20px auto;
 }
 
 </style>
@@ -50,7 +50,7 @@ for (let i = 0; i < dataz.length - 1; i++) {
 	const el = document.createElement('div');
 	el.style.left = `${dataz[i].ts / 100}px`;
 	el.style.width = `${width / 100}px`;
-	if (!dataz[i].val)
+	if (dataz[i].val)
 		el.classList.add('high');
 	viz.appendChild(el);
 }
