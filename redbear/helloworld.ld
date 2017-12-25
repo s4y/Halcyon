@@ -1,3 +1,26 @@
+SEARCH_DIR(.)
+GROUP(-lgcc -lc -lnosys)
+
+MEMORY
+{
+  FLASH (rx) : ORIGIN = 0x23000, LENGTH = 0x5d000
+  RAM (rwx) :  ORIGIN = 0x20001368, LENGTH = 0xec98
+  
+}
+
+SECTIONS
+{
+}
+
+SECTIONS
+{
+  . = ALIGN(4);
+  .mem_section_dummy_ram :
+  {
+  }
+
+} INSERT AFTER .data;
+
 SECTIONS
 {
   .mem_section_dummy_rom :
@@ -51,5 +74,6 @@ SECTIONS
     KEEP(*(.cli_command))
     PROVIDE(__stop_cli_command = .);
   } > FLASH
-  
-INCLUDE "dump/nRF5_SDK_14.2.0_17b948a/components/softdevice/s112/toolchain/armgcc/armgcc_s112_nrf52810_xxaa.ld"
+} INSERT AFTER .text
+
+INCLUDE "nrf5x_common.ld"

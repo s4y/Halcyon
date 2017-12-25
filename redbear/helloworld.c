@@ -47,8 +47,6 @@ void SystemInit() {}
 
 int main() {
 
-	nrf_gpio_cfg_output(11);
-
     APP_ERROR_CHECK(nrf_sdh_enable_request());
 
 	for (;;) sd_app_evt_wait();

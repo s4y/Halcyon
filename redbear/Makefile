@@ -6,7 +6,7 @@ GCC_BIN := ./dump/gcc-arm-none-eabi-6-2017-q2-update/bin
 __PHONY:
 
 upload-softdevice: __PHONY
-	$(OPENOCD) -c 'init;reset halt;program $(SDK_ROOT)/softdevice/s112/hex/s112_nrf52810_5.1.0_softdevice.hex reset verify exit'
+	$(OPENOCD) -c 'init;reset halt;program $(SDK_ROOT)/softdevice/s132/hex/s132_nrf52_5.0.0_softdevice.hex reset verify exit'
 
 upload-%: %.hex __PHONY
 	$(OPENOCD) -c 'init;reset halt;program $< reset verify exit'
@@ -49,7 +49,7 @@ debug-%: %.out upload-%
 		-I$(SDK_ROOT)/libraries/experimental_log/ \
 		-I$(SDK_ROOT)/libraries/experimental_log/src/ \
 		-I$(SDK_ROOT)/ \
-		-I$(SDK_ROOT)/softdevice/s112/headers/ \
+		-I$(SDK_ROOT)/softdevice/s132/headers/ \
 		-L$(SDK_ROOT)/toolchain/gcc/ \
 		-I. \
  	 	-Wl,-T,$*.ld \
