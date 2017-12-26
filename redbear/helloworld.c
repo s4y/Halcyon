@@ -1,53 +1,34 @@
-#include <device/nrf52832_peripherals.h>
-#include <drivers_nrf/hal/nrf_gpio.h>
-#include <drivers_nrf/hal/nrf_pwm.h>
-#include <nrf_soc.h>
-#include <nrf_sdh.h>
-
-void sos() {
-	nrf_gpio_cfg_output(11);
-	nrf_pwm_pins_set(NRF_PWM0, (uint32_t[]){11, -1, -1, -1});
-	nrf_pwm_enable(NRF_PWM0);
-	nrf_pwm_loop_set(NRF_PWM0, 1);
-	nrf_pwm_configure(NRF_PWM0, NRF_PWM_CLK_125kHz, NRF_PWM_MODE_UP, 100);
-	nrf_pwm_shorts_enable(NRF_PWM0, NRF_PWM_SHORT_LOOPSDONE_SEQSTART0_MASK);
-
-	const nrf_pwm_values_common_t pwm_seq0_values[] = {
-		0, 100, 0, 100, 0, 100, 100, 100,
-	};
-	const nrf_pwm_sequence_t pwm_seq0 = {
-		.values = { .p_common = pwm_seq0_values },
-		.length = sizeof(pwm_seq0_values) / sizeof(nrf_pwm_values_common_t),
-		.repeats = 100,
-	};
-	nrf_pwm_sequence_set(NRF_PWM0, 0, &pwm_seq0);
-
-	const nrf_pwm_values_common_t pwm_seq1_values[] = {
-		0, 0, 100, 0, 0, 100, 0, 0, 100, 100, 100, 0, 100, 0, 100, 0, 100, 100,
-		100, 100, 100, 100, 100,
-	};
-	const nrf_pwm_sequence_t pwm_seq1 = {
-		.values = { .p_common = pwm_seq1_values },
-		.length = sizeof(pwm_seq1_values) / sizeof(nrf_pwm_values_common_t),
-		.repeats = 100,
-	};
-	nrf_pwm_sequence_set(NRF_PWM0, 1, &pwm_seq1);
-
-	nrf_pwm_task_trigger(NRF_PWM0, NRF_PWM_TASK_SEQSTART0);
-
-	__disable_irq();
-	for(;;) __asm__("wfe");;
-}
-
-__WEAK void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info) {
-	sos();
-}
-
-void SystemInit() {}
+__asm__(".word 0x2000f000");
+__asm__(".word main");
 
 int main() {
 
-    APP_ERROR_CHECK(nrf_sdh_enable_request());
+	*(unsigned int*)0x50000518 = 1UL << 11;
 
-	for (;;) sd_app_evt_wait();
+	*(unsigned int*)0x4001C560 = 11;
+	*(unsigned int*)0x4001C500 = 1;
+
+	*(unsigned int*)0x4001C200 = 1 << 2;
+
+	*(unsigned int*)0x4001C504 = 1;
+	*(unsigned int*)0x4001C50C = 4;
+	*(unsigned int*)0x4001C514 = 1;
+
+	unsigned short pwm_seq0[32];
+	for (int i = 0; i < 32; i++)
+		pwm_seq0[i] = (1024 / 32) * (i + 1);
+	*(const unsigned short**)0x4001C520 = pwm_seq0;
+	*(unsigned int*)0x4001C524 = sizeof(pwm_seq0) / sizeof(*pwm_seq0);
+	*(unsigned int*)0x4001C52C = 1024;
+
+	unsigned short pwm_seq1[8];
+	for (int i = 0; i < 8; i++)
+		pwm_seq1[i] = (1024 / 8) * (8 - i);
+	*(const unsigned short**)0x4001C540 = pwm_seq1;
+	*(unsigned int*)0x4001C544 = sizeof(pwm_seq1) / sizeof(*pwm_seq1);
+
+	*(unsigned int*)0x4001C00C = 1;
+
+	for (;;) __asm__ ("wfe");
+	return 0;
 }
