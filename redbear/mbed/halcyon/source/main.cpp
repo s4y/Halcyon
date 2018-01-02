@@ -6,6 +6,7 @@
 const char* const kDeviceName = "Halcyon bridge";
 
 DigitalOut led(LED1, 0);
+DigitalOut led2(P0_4, 0);
 
 class HalcyonBus {
 	public:
@@ -28,27 +29,69 @@ class HalcyonBus {
 
 	std::array<uint8_t, 8> serialBuf{{0}};
 
-	void handleRead(int) {
+	uint8_t ourAddr = 0x21;
+	std::array<uint8_t, 7> ourState{{0x81, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00}};
+	std::array<uint8_t, 8> txBuf{{0}};
+	Timeout txTimeout;
+
+	void handleReadComplete(int) {
 		led = 0;
 		timeout.detach();
 		scheduleRead();
+
+		for (size_t i = 0; i < serialBuf.size(); i++)
+			serialBuf[i] = ~serialBuf[i];
+
 		if (observer) observer->didReadPacket(serialBuf);
 
 		std::array<uint8_t, 7> stateBuf;
-		for (size_t i = 0; i < stateBuf.size(); i++)
-			stateBuf[i] = ~serialBuf[i+1];
+		std::copy(serialBuf.begin() + 1, serialBuf.end(), stateBuf.begin());
 
-		switch (static_cast<uint8_t>(~serialBuf[0])) {
+		switch (serialBuf[0]) {
 			case 0x00:
 				if (observer) observer->nodeDidChangeState(Node::Blower, stateBuf);
 				break;
 			case 0x20:
 				if (observer) observer->nodeDidChangeState(Node::PrimaryRemote, stateBuf);
 				break;
+			case 0x21:
+				break;
 			default:
 				led = 1;
 				break;
 		}
+
+		if (!(stateBuf[1] & 0x20)) {
+			ourState[2] = stateBuf[2];
+			ourState[3] = stateBuf[3];
+			ourState[1] &= ~0x20;
+		}
+
+		// AC must be turned off at all times >:(
+		// (Yes, this is just a PoC/test.)
+		if ((stateBuf[2] & 0x01)) {
+			ourState[1] |= 0x08;
+			ourState[2] &= ~0x01;
+			led2 = 1;
+		}
+
+		// Our time to shine!
+		if (stateBuf[0] == 0xa1)
+			txTimeout.attach(callback(this, &HalcyonBus::handleTx), 0.1);
+	}
+
+	void handleTx() {
+		txBuf[0] = ~ourAddr;
+		for (size_t i = 0; i < ourState.size(); i++)
+			txBuf[i+1] = ~ourState[i];
+		uart.write(txBuf.data(), txBuf.size(), callback(this, &HalcyonBus::handleTxComplete));
+		led = 1;
+		ourState[2] &= ~0x08;
+	}
+
+	void handleTxComplete(int) {
+		led = 0;
+		led2 = 0;
 	}
 
 	void handleTimeout() {
@@ -59,7 +102,7 @@ class HalcyonBus {
 
 	void handleReadStart() {
 		uart.attach(nullptr);
-		uart.read(serialBuf.data(), serialBuf.size(), callback(this, &HalcyonBus::handleRead));
+		uart.read(serialBuf.data(), serialBuf.size(), callback(this, &HalcyonBus::handleReadComplete));
 		timeout.attach(callback(this, &HalcyonBus::handleTimeout), 0.2);
 	}
 
