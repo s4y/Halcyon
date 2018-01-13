@@ -5,9 +5,6 @@
 
 const char* const kDeviceName = "Halcyon bridge";
 
-DigitalOut led(LED1, 0);
-DigitalOut led2(P0_4, 0);
-
 class HalcyonBus {
 	public:
 	enum class Node {
@@ -35,7 +32,6 @@ class HalcyonBus {
 	Timeout txTimeout;
 
 	void handleReadComplete(int) {
-		led = 0;
 		timeout.detach();
 		scheduleRead();
 
@@ -57,7 +53,6 @@ class HalcyonBus {
 			case 0x21:
 				break;
 			default:
-				led = 1;
 				break;
 		}
 
@@ -67,16 +62,17 @@ class HalcyonBus {
 			ourState[1] &= ~0x20;
 		}
 
+#if 0
 		// AC must be turned off at all times >:(
 		// (Yes, this is just a PoC/test.)
 		if ((stateBuf[2] & 0x01)) {
 			ourState[1] |= 0x08;
 			ourState[2] &= ~0x01;
-			led2 = 1;
 		}
+#endif
 
 		// Our time to shine!
-		if (stateBuf[0] == 0xa1)
+		if (ourState[0] == 0xa1)
 			txTimeout.attach(callback(this, &HalcyonBus::handleTx), 0.1);
 	}
 
@@ -85,17 +81,13 @@ class HalcyonBus {
 		for (size_t i = 0; i < ourState.size(); i++)
 			txBuf[i+1] = ~ourState[i];
 		uart.write(txBuf.data(), txBuf.size(), callback(this, &HalcyonBus::handleTxComplete));
-		led = 1;
 		ourState[2] &= ~0x08;
 	}
 
 	void handleTxComplete(int) {
-		led = 0;
-		led2 = 0;
 	}
 
 	void handleTimeout() {
-		led = 1;
 		uart.abort_read();
 		scheduleRead();
 	}
@@ -117,6 +109,9 @@ class HalcyonBus {
 
 		// Custom baud rate around 500.
 		NRF_UART0->BAUDRATE = 0x21000;
+
+		// Pseudo-ground.
+		nrf_gpio_cfg_output(P0_3);
 
 		// Attach a pullup resistor to rx; it's connected to an optocoupler which only pulls down.
 		nrf_gpio_cfg_input(rx, NRF_GPIO_PIN_PULLUP);
@@ -206,7 +201,10 @@ int main() {
 	BLE &ble = BLE::Instance();
 	ble.init();
 
-	HalcyonBus bridge(P0_29, P0_30);
+	// Pseudo ground.
+	nrf_gpio_cfg_output(P0_3);
+
+	HalcyonBus bridge(P0_29, P0_5);
 	BLEService service(&bridge);
 
 	for (;;)
