@@ -2,6 +2,7 @@
 #include "BLE.h"
 
 #include <array>
+#include <functional>
 
 const char* const kDeviceName = "Halcyon bridge";
 
@@ -13,12 +14,12 @@ class HalcyonBus {
 		SecondaryRemote,
 	};
 
-	struct DebugObserver {
+	struct Observer {
 		virtual void didReadPacket(const std::array<uint8_t, 8>& buf) {}
 		virtual void nodeDidChangeState(Node node, const std::array<uint8_t, 7>& buf) {}
 	};
 
-	DebugObserver* observer = nullptr;
+	Observer* observer = nullptr;
 
 	private:
 	Serial uart;
@@ -51,12 +52,16 @@ class HalcyonBus {
 				if (observer) observer->nodeDidChangeState(Node::PrimaryRemote, stateBuf);
 				break;
 			case 0x21:
-				break;
+				if (observer) observer->nodeDidChangeState(Node::SecondaryRemote, stateBuf);
 			default:
 				break;
 		}
 
-		if (!(stateBuf[1] & 0x20)) {
+		// Update our own state if:
+		//   - (Another device is changing state,
+		//   - OR we don't have state),
+		//   - AND we're not changing state.
+		if ((stateBuf[1] & 0x08 || ourState[1] & 0x20) && !(ourState[1] & 0x08)) {
 			ourState[2] = stateBuf[2];
 			ourState[3] = stateBuf[3];
 			ourState[1] &= ~0x20;
@@ -72,7 +77,7 @@ class HalcyonBus {
 #endif
 
 		// Our time to shine!
-		if (ourState[0] == 0xa1)
+		if (stateBuf[0] == 0xa1)
 			txTimeout.attach(callback(this, &HalcyonBus::handleTx), 0.1);
 	}
 
@@ -81,7 +86,7 @@ class HalcyonBus {
 		for (size_t i = 0; i < ourState.size(); i++)
 			txBuf[i+1] = ~ourState[i];
 		uart.write(txBuf.data(), txBuf.size(), callback(this, &HalcyonBus::handleTxComplete));
-		ourState[2] &= ~0x08;
+		ourState[1] &= ~0x08;
 	}
 
 	void handleTxComplete(int) {
@@ -119,18 +124,29 @@ class HalcyonBus {
 		scheduleRead();
 	}
 
+	void putState(std::array<uint8_t, 2> state) {
+		ourState[1] |= 0x08;
+		ourState[2] = state[0];
+		ourState[3] = state[1];
+	}
+
 };
 
-class BLEService: HalcyonBus::DebugObserver {
+class BLEService: HalcyonBus::Observer {
 
 	template <size_t Size>
-	class ROBufferCharacteristic {
+	class ROCharacteristic {
+		protected:
 		std::array<uint8_t, Size> buf{{0}};
-		GattCharacteristic characteristic{0x0, buf.data(), buf.size(), buf.size(), GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_READ | GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_NOTIFY, NULL, 0, false};
+		GattCharacteristic characteristic;
+
+		ROCharacteristic(const UUID uuid, uint8_t props) :
+			characteristic{uuid, buf.data(), Size, Size, props, NULL, 0, false}
+		{}
 
 		public:
-		ROBufferCharacteristic(const UUID uuid) :
-			characteristic{uuid, buf.data(), Size, Size, GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_READ | GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_NOTIFY, NULL, 0, false}
+		ROCharacteristic(const UUID uuid) :
+			ROCharacteristic{uuid, GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_READ | GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_NOTIFY}
 		{}
 
 		void update(const std::array<uint8_t, Size>& from) {
@@ -147,15 +163,53 @@ class BLEService: HalcyonBus::DebugObserver {
 		operator GattCharacteristic*() { return &characteristic; }
 	};
 
-	ROBufferCharacteristic<8> bufCharacteristic{0xb00f};
-	ROBufferCharacteristic<7> blowerCharacteristic{0xac00};
-	ROBufferCharacteristic<7> themostatCharacteristic{0xac20};
+	template <size_t Size>
+	class RWCharacteristic: public ROCharacteristic<Size> {
+
+		void onDataWritten(const GattWriteCallbackParams* params) {
+			if (params->handle != this->characteristic.getValueAttribute().getHandle())
+				return;
+
+			if (params->len != Size)
+				return;
+
+			std::array<uint8_t, Size> newval{params->data[0], params->data[1]};
+			if (this->buf == newval)
+				return;
+
+			this->update(newval);
+			if (onWritten) onWritten(newval);
+		}
+
+		public:
+		RWCharacteristic(const UUID uuid) :
+			ROCharacteristic<Size>{uuid, GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_READ | GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_WRITE | GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_NOTIFY}
+		{
+			this->characteristic.requireSecurity(SecurityManager::SECURITY_MODE_ENCRYPTION_NO_MITM);
+			BLE::Instance().gattServer().onDataWritten().add(FunctionPointerWithContext<const GattWriteCallbackParams*>(this, &RWCharacteristic::onDataWritten));
+		}
+
+		~RWCharacteristic() {
+			BLE::Instance().gattServer().onDataWritten().detach(FunctionPointerWithContext<const GattWriteCallbackParams*>(this, &RWCharacteristic::onDataWritten));
+		}
+
+		std::function<void(const std::array<uint8_t, Size>&)> onWritten = nullptr;
+	};
+
+	ROCharacteristic<8> bufCharacteristic{0xb00f};
+	ROCharacteristic<7> blowerCharacteristic{0xac00};
+	ROCharacteristic<7> themostatCharacteristic{0xac20};
+	ROCharacteristic<7> secondaryRemoteCharacteristic{0xac21};
+
+	RWCharacteristic<2> stateCharacteristic{0xaced};
 
 	GattService service{[&]{
 		GattCharacteristic* characteristics[] = {
 			bufCharacteristic,
 			blowerCharacteristic,
 			themostatCharacteristic,
+			secondaryRemoteCharacteristic,
+			stateCharacteristic
 		};
 		return GattService{0xACAC, characteristics, sizeof(characteristics) / sizeof(GattCharacteristic *)};
 	}()};
@@ -172,6 +226,10 @@ class BLEService: HalcyonBus::DebugObserver {
 			case HalcyonBus::Node::PrimaryRemote:
 				themostatCharacteristic.update(buf);
 				break;
+			case HalcyonBus::Node::SecondaryRemote:
+				secondaryRemoteCharacteristic.update(buf);
+				stateCharacteristic.update({buf[2], buf[3]});
+				break;
 			default:
 				break;
 		}
@@ -185,13 +243,17 @@ class BLEService: HalcyonBus::DebugObserver {
 	BLEService(HalcyonBus* bridge) {
 		BLE &ble = BLE::Instance();
 
-		//ble.gap().onConnection(&onConnection);
+		// ble.gap().onConnection(this, &BLEService::onConnection);
 		ble.gap().onDisconnection(this, &BLEService::didDisconnect);
 
 		ble.gattServer().addService(service);
 		ble.gap().setDeviceName(reinterpret_cast<const uint8_t*>(kDeviceName));
 		ble.gap().setAppearance(GapAdvertisingData::Appearance(1537) /* HVAC -> Thermostat */);
 		ble.gap().startAdvertising();
+
+		stateCharacteristic.onWritten = [=](const std::array<uint8_t, 2> newval) {
+			bridge->putState(newval);
+		};
 
 		bridge->observer = this;
 	}
@@ -200,6 +262,7 @@ class BLEService: HalcyonBus::DebugObserver {
 int main() {
 	BLE &ble = BLE::Instance();
 	ble.init();
+	ble.securityManager().init(false, false);
 
 	// Pseudo ground.
 	nrf_gpio_cfg_output(P0_3);
