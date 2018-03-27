@@ -1,0 +1,14 @@
+# Source files common to all targets
+NRF_SRC_FILES += \
+  $(SDK)/components/boards/boards.c \
+
+# Include folders common to all targets
+NRF_INC_FOLDERS += \
+  $(SDK)/modules/nrfx \
+  $(SDK)/modules/nrfx/hal \
+  $(SDK)/modules/nrfx/mdk \
+  $(SDK)/components/boards \
+  $(SDK)/components/toolchain/cmsis/include \
+  $(SDK)/components/libraries/util \
+  $(SDK)/components/drivers_nrf/nrf_soc_nosd \
+  $(SDK)/integration/nrfx \
