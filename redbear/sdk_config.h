@@ -121,7 +121,7 @@
 // <e> PEER_MANAGER_ENABLED - peer_manager - Peer Manager
 //==========================================================
 #ifndef PEER_MANAGER_ENABLED
-#define PEER_MANAGER_ENABLED 0
+#define PEER_MANAGER_ENABLED 1
 #endif
 // <o> PM_MAX_REGISTRANTS - Number of event handlers that can be registered. 
 #ifndef PM_MAX_REGISTRANTS
@@ -319,14 +319,14 @@
  
 
 #ifndef BLE_DFU_ENABLED
-#define BLE_DFU_ENABLED 0
+#define BLE_DFU_ENABLED 1
 #endif
 
 // <q> NRF_DFU_BLE_BUTTONLESS_SUPPORTS_BONDS  - Buttonless DFU supports bonds.
  
 
 #ifndef NRF_DFU_BLE_BUTTONLESS_SUPPORTS_BONDS
-#define NRF_DFU_BLE_BUTTONLESS_SUPPORTS_BONDS 0
+#define NRF_DFU_BLE_BUTTONLESS_SUPPORTS_BONDS 1
 #endif
 
 // </h> 
@@ -2245,7 +2245,7 @@
 // <e> FDS_ENABLED - fds - Flash data storage module
 //==========================================================
 #ifndef FDS_ENABLED
-#define FDS_ENABLED 0
+#define FDS_ENABLED 1
 #endif
 // <h> Pages - Virtual page settings
 

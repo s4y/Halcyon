@@ -1,8 +1,26 @@
 #include "mbed.h"
 #include "BLE.h"
+#include "nrf_delay.h"
+#include "nrf_drv_gpiote.h"
 
 #include <array>
 #include <functional>
+
+#define WHICH_BOARD 1
+
+#if WHICH_BOARD == 0
+
+#define TX_PIN P0_29
+#define RX_PIN P0_30
+#define TX_INV_PIN P0_11
+
+#elif WHICH_BOARD == 1
+
+#define TX_PIN P0_7
+#define RX_PIN P0_5
+#define TX_INV_PIN P0_3
+
+#endif
 
 const char* const kDeviceName = "Halcyon bridge";
 
@@ -114,12 +132,6 @@ class HalcyonBus {
 
 		// Custom baud rate around 500.
 		NRF_UART0->BAUDRATE = 0x21000;
-
-		// Pseudo-ground.
-		nrf_gpio_cfg_output(P0_3);
-
-		// Attach a pullup resistor to rx; it's connected to an optocoupler which only pulls down.
-		nrf_gpio_cfg_input(rx, NRF_GPIO_PIN_PULLUP);
 
 		scheduleRead();
 	}
@@ -259,18 +271,45 @@ class BLEService: HalcyonBus::Observer {
 	}
 };
 
+static void invert_init()
+{
+    NRF_GPIOTE->CONFIG[0] = ( (GPIOTE_CONFIG_MODE_Event << GPIOTE_CONFIG_MODE_Pos) |
+                            (TX_PIN << GPIOTE_CONFIG_PSEL_Pos) |
+                            (GPIOTE_CONFIG_POLARITY_Toggle << GPIOTE_CONFIG_POLARITY_Pos));
+    
+    NRF_GPIOTE->CONFIG[1] = ( (GPIOTE_CONFIG_MODE_Task << GPIOTE_CONFIG_MODE_Pos) |
+                            (TX_INV_PIN << GPIOTE_CONFIG_PSEL_Pos) |
+                            (GPIOTE_CONFIG_POLARITY_Toggle << GPIOTE_CONFIG_POLARITY_Pos) |
+                            (GPIOTE_CONFIG_OUTINIT_High << GPIOTE_CONFIG_OUTINIT_Pos));  
+    
+    NRF_PPI->CH[0].EEP = (uint32_t)&NRF_GPIOTE->EVENTS_IN[0];
+    NRF_PPI->CH[1].TEP = (uint32_t)&NRF_GPIOTE->TASKS_OUT[1];
+    NRF_PPI->CHEN = (PPI_CHEN_CH0_Enabled << PPI_CHEN_CH0_Pos);
+}
+
 int main() {
+
+	nrf_drv_gpiote_init();
+	{
+		nrf_drv_gpiote_in_config_t config{};
+		config.sense = NRF_GPIOTE_POLARITY_TOGGLE;
+		nrf_drv_gpiote_in_init(TX_PIN, &config, NULL);
+	}
+	{
+	}
+
+	for (;;) {
+		nrf_delay_us(10000);
+		nrf_gpio_pin_toggle(TX_PIN);
+	}
+
 	BLE &ble = BLE::Instance();
 	ble.init();
 	ble.securityManager().init(false, false);
 
-	// Pseudo ground.
-	nrf_gpio_cfg_output(P0_3);
-
-	HalcyonBus bridge(P0_29, P0_5);
-	BLEService service(&bridge);
+	// HalcyonBus bridge(TX_PIN, RX_PIN);
+	// BLEService service(&bridge);
 
 	for (;;)
 		ble.processEvents();
-
 }

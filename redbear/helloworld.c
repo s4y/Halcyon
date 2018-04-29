@@ -1,6 +1,3 @@
-__asm__(".word 0x2000f000");
-__asm__(".word main");
-
 int main() {
 
 	*(unsigned int*)0x50000518 = 1UL << 11;
