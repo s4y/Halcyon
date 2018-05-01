@@ -7,9 +7,10 @@ include Makefile.nrf
 OPENOCD := openocd -f interface/cmsis-dap.cfg -f target/nrf52.cfg -c "transport select swd"
 GCC_BIN := $(GCC)/bin
 
-BUILD := Debug
 TARGET := halcyon
-HEX = build/$(BUILD)/$(TARGET).hex
+
+DEBUG_HEX = build/Debug/$(TARGET).hex
+RELEASE_HEX = build/Release/$(TARGET).hex
 
 CC := $(GCC_BIN)/arm-none-eabi-gcc
 AR := $(GCC_BIN)/arm-none-eabi-ar
@@ -21,15 +22,17 @@ CFLAGS := \
 	-mfloat-abi=hard \
 	-mfpu=fpv4-sp-d16 \
 	-DNRF52 \
+	-DNRF52832_XXAA \
 	-DBOARD_CUSTOM \
+	-DSOFTDEVICE_PRESENT \
 	-DNRF_SD_BLE_API_VERSION=6 \
+	-DUSE_APP_CONFIG \
 	-DNO_VTOR_CONFIG \
 	-I. $(addprefix -I,$(NRF_INC_FOLDERS)) \
 	-L$(SDK)/modules/nrfx/mdk \
 
 DEBUG_CFLAGS := \
 	--specs=rdimon.specs \
-	-DNRF_LOG_ENABLED=1 \
 	-DDEBUG \
 	-g \
 	-lc \
@@ -38,13 +41,13 @@ DEBUG_CFLAGS := \
 RELEASE_CFLAGS := \
 	--specs=nosys.specs \
 	-Os \
-	-flto \
+	# -flto \
 
 NRF_OBJ_FILES := $(NRF_SRC_FILES)
 NRF_OBJ_FILES := $(patsubst %.c,%.o,$(NRF_OBJ_FILES))
 NRF_OBJ_FILES := $(patsubst %.S,%.o,$(NRF_OBJ_FILES)) 
 
-default: $(HEX)
+default: $(RELEASE_HEX)
 
 __PHONY:
 
@@ -70,37 +73,42 @@ halt: __PHONY
 reset: __PHONY
 	$(OPENOCD) -c 'init;reset;exit'
 
-semihost: $(HEX) __PHONY
+semihost: $(DEBUG_HEX) __PHONY
 	$(OPENOCD) -c 'init;reset halt;program $< verify;arm semihosting enable;reset'
 
 upload-softdevice: __PHONY
 	$(OPENOCD) -c 'init;reset halt;program $(SDK)/components/softdevice/s132/hex/s132_nrf52_6.0.0_softdevice.hex reset verify exit'
 
-upload: $(HEX) __PHONY
+upload: $(RELEASE_HEX) __PHONY
 	$(OPENOCD) -c 'init;reset halt;program $< verify exit'
 
-debug: build/$(BUILD)/$(TARGET).out upload __PHONY
+run: $(RELEASE_HEX) __PHONY
+	$(OPENOCD) -c 'init;reset halt;program $< verify reset exit'
+
+debugserver: build/Debug/$(TARGET).out upload __PHONY
+	$(OPENOCD) -c "init; arm semihosting enable; reset halt"
+
+debugclient: build/Debug/$(TARGET).out __PHONY
+	$(GCC_BIN)/arm-none-eabi-gdb $< -ex 'target extended-remote 127.0.0.1:3333'
+
+debug: build/Debug/$(TARGET).out upload __PHONY
 	$(GCC_BIN)/arm-none-eabi-gdb "$<" -ex 'target remote | $(OPENOCD) -c "gdb_port pipe; init; arm semihosting enable; reset halt"'
 
 %.hex: %.out
 	$(GCC_BIN)/arm-none-eabi-objcopy -O ihex "$<" "$@"
 
 define builddir
-$(1)/libnrf.a: $$(addprefix $(1)/,$$(NRF_OBJ_FILES))
+$(1)/$$(SDK)/%.o: $$(SDK)/%.c app_config.h Makefile | $(DEPS)/stamp
 	@mkdir -p $$(dir $$@)
-	$$(AR) rcs "$$@" $$(addprefix $(1)/,$$(NRF_OBJ_FILES))
+	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
 
-$(1)/$$(SDK)/%.o: $$(SDK)/%.c sdk_config.h nrfx_config.h | $(DEPS)/stamp
+$(1)/$$(SDK)/%.o: $$(SDK)/%.S app_config.h Makefile | $(DEPS)/stamp
 	@mkdir -p $$(dir $$@)
-	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) -fno-lto "$$<"
+	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
 
-$(1)/$$(SDK)/%.o: $$(SDK)/%.S sdk_config.h nrfx_config.h | $(DEPS)/stamp
+$(1)/%.out: %.ld %.c $$(addprefix $(1)/,$$(NRF_OBJ_FILES))
 	@mkdir -p $$(dir $$@)
-	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) -fno-lto "$$<"
-
-$(1)/%.out: %.c %.ld $(1)/libnrf.a
-	@mkdir -p $$(dir $$@)
-	$$(CC) -o "$$@" $(2) $$(CFLAGS) -L$(1) -Wl,-T,$$*.ld $$< -lnrf
+	$$(CC) -o "$$@" $(2) $$(CFLAGS) -L$(1) -Wl,-T,$$^
 endef
 
 $(eval $(call builddir,build/Debug,$(DEBUG_CFLAGS)))

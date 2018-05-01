@@ -23,7 +23,6 @@ NRF_SRC_FILES += \
   $(SDK)/components/libraries/experimental_log/src/nrf_log_str_formatter.c \
   $(SDK)/components/libraries/experimental_memobj/nrf_memobj.c \
   $(SDK)/components/libraries/experimental_section_vars/nrf_section_iter.c \
-  $(SDK)/components/libraries/fifo/app_fifo.c \
   $(SDK)/components/libraries/fstorage/nrf_fstorage.c \
   $(SDK)/components/libraries/fstorage/nrf_fstorage_sd.c \
   $(SDK)/components/libraries/hardfault/hardfault_implementation.c \
@@ -31,8 +30,6 @@ NRF_SRC_FILES += \
   $(SDK)/components/libraries/scheduler/app_scheduler.c \
   $(SDK)/components/libraries/strerror/nrf_strerror.c \
   $(SDK)/components/libraries/timer/app_timer.c \
-  $(SDK)/components/libraries/uart/app_uart_fifo.c \
-  $(SDK)/components/libraries/uart/retarget.c \
   $(SDK)/components/libraries/util/app_error.c \
   $(SDK)/components/libraries/util/app_error_handler_gcc.c \
   $(SDK)/components/libraries/util/app_error_weak.c \
@@ -148,7 +145,7 @@ NRF_INC_FOLDERS += \
   $(SDK)/components/libraries/usbd/class/hid/mouse \
   $(SDK)/components/libraries/usbd/class/msc \
   $(SDK)/components/libraries/usbd/config \
-  $(SDK)/config/nrf52832 \
+  $(SDK)/config/nrf52832/config \
   $(SDK)/components/libraries/util \
   $(SDK)/components/nfc/ndef/conn_hand_parser \
   $(SDK)/components/nfc/ndef/conn_hand_parser/ac_rec_parser \

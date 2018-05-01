@@ -1,14 +1,22 @@
+#include "app_config.h"
+
 #include "app_error.h"
 #include "ble.h"
 #include "nordic_common.h"
+
+#include "nrf_pwr_mgmt.h"
+#include "nrf_sdm.h"
+#include "nrf_sdh.h"
+#include "nrf_gpio.h"
+#include "nrf_delay.h"
 #include "nrf_log.h"
 #include "nrf_log_backend_serial.h"
 #include "nrf_log_ctrl.h"
-#include "nrf_pwr_mgmt.h"
-#include "nrf_sdh.h"
+
+
 #include "nrfx_gpiote.h"
-#include "nrfx_ppi.h"
 #include "nrfx_uarte.h"
+#include "nrfx_ppi.h"
 
 #define WHICH_BOARD 0
 
@@ -17,8 +25,6 @@
 #define TX_PIN NRF_GPIO_PIN_MAP(0, 29)
 #define RX_PIN NRF_GPIO_PIN_MAP(0, 30)
 #define TX_INV_PIN NRF_GPIO_PIN_MAP(0, 11)
-
-#define LED_PIN NRF_GPIO_PIN_MAP(0, 11)
 
 #elif WHICH_BOARD == 1
 
@@ -29,6 +35,7 @@
 #endif
 
 // ## Quick and dirty openocd log backend
+#if NRF_MODULE_ENABLED(NRF_LOG)
 
 static void printf_tx(void const * p_context, char const * p_buffer, size_t len) {
 	printf("%.*s", len, p_buffer);
@@ -57,33 +64,40 @@ const static nrf_log_backend_api_t printf_log_api = {
 static nrf_log_backend_t printf_log_backend = {
 	.p_api = &printf_log_api,
 };
+#endif
 
-void app_error_handler( uint32_t error_code, uint32_t line_num, const uint8_t * p_file_name) {
-	printf("!!! App error:  %s:%ld %lu\n", p_file_name, line_num, error_code);
+void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info) {
+#if DEBUG
+	printf("!!! App fault: id: %lu, pc = %lu, info = %lu\n", id, pc, info);
+#endif
 }
 
 int main(void) {
+#if NRF_MODULE_ENABLED(NRF_LOG)
 	nrf_log_backend_add(&printf_log_backend, NRF_LOG_LEVEL);
 	nrf_log_backend_enable(&printf_log_backend);
 	nrf_log_init(NULL, 0);
+#endif
 
-	NRF_LOG_INFO("Before nrf_sdh_enable_request()");
-	NRF_LOG_FLUSH();
-
-	// On my device, this never returns.
 	APP_ERROR_CHECK(nrf_sdh_enable_request());
 
-	NRF_LOG_INFO("After nrf_sdh_enable_request()");
-	NRF_LOG_FLUSH();
+	nrfx_uarte_t uarte = NRFX_UARTE_INSTANCE(0);
+	{
+		nrfx_uarte_config_t cfg = NRFX_UARTE_DEFAULT_CONFIG;
+		cfg.pseltxd = TX_PIN;
+		cfg.pselrxd = RX_PIN;
+		// Custom baud rate around 500.
+		cfg.baudrate = 0x21000;
+		APP_ERROR_CHECK(nrfx_uarte_init(&uarte, &cfg, NULL));
+	}
 
-#if 0
 	{
 		nrfx_gpiote_init();
 
 		nrfx_gpiote_in_config_t in_cfg = NRFX_GPIOTE_CONFIG_IN_SENSE_TOGGLE(false);
 		nrfx_gpiote_in_init(TX_PIN, &in_cfg, NULL);
 
-		nrfx_gpiote_out_config_t out_cfg = NRFX_GPIOTE_CONFIG_OUT_TASK_TOGGLE(true);
+		nrfx_gpiote_out_config_t out_cfg = NRFX_GPIOTE_CONFIG_OUT_TASK_TOGGLE(false);
 		nrfx_gpiote_out_init(TX_INV_PIN, &out_cfg);
 
 		nrf_ppi_channel_t inv_channel;
@@ -94,31 +108,13 @@ int main(void) {
 			nrfx_gpiote_out_task_addr_get(TX_INV_PIN)
 		);
 
-		nrfx_ppi_channel_enable(inv_channel);
 		nrfx_gpiote_in_event_enable(TX_PIN, 0);
 		nrfx_gpiote_out_task_enable(TX_INV_PIN);
-	}
-#endif
-
-#if 0
-	nrfx_uart_t uart = NRFX_UART_INSTANCE(0);
-	{
-		nrfx_uart_config_t cfg = NRFX_UART_DEFAULT_CONFIG;
-		cfg.pseltxd = TX_INV_PIN;
-		cfg.pselrxd = RX_PIN;
-		// Custom baud rate around 500.
-		cfg.baudrate = 0x21000;
-
-		printf("t: %lu r: %lu\n", cfg.pseltxd, cfg.pselrxd);
-		int ret = nrfx_uart_init(&uart, &cfg, NULL);
-		printf("UART: %d\n", ret);
+		nrfx_ppi_channel_enable(inv_channel);
 	}
 
 	uint8_t packet[] = "AAAAAAAAAAAAABABABABABABABABABABABAB";
-	nrfx_uart_tx(&uart, packet, sizeof(packet) / sizeof(packet[0]));
-#endif
-
-
+	nrfx_uarte_tx(&uarte, packet, sizeof(packet) / sizeof(packet[0]));
 #if 0
 	nrf_gpio_cfg_input(NRF_GPIO_PIN_MAP(0, 30), NRF_GPIO_PIN_PULLUP);
 
@@ -143,6 +139,8 @@ int main(void) {
     APP_ERROR_CHECK(nrf_sdh_ble_default_cfg_set(1, &ram_start));
     APP_ERROR_CHECK(nrf_sdh_ble_enable(&ram_start));
 #endif
+
+	NRF_LOG_INFO("All good down here.");
 
 	for (;;) {
 		NRF_LOG_FLUSH();
