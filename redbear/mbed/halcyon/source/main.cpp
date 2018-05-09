@@ -1,24 +1,40 @@
 #include "mbed.h"
 #include "BLE.h"
-#include "nrf_delay.h"
+
+extern "C" {
+#include "nrf_drv_ppi.h"
 #include "nrf_drv_gpiote.h"
+#include "nrf_soc.h"
+}
 
 #include <array>
 #include <functional>
 
-#define WHICH_BOARD 1
+#define WHICH_BOARD 3
 
 #if WHICH_BOARD == 0
 
-#define TX_PIN P0_29
-#define RX_PIN P0_30
-#define TX_INV_PIN P0_11
+#define RX_PIN P0_5
+#define TX_PIN P0_11
+#define TX_INV_PIN P0_4
 
 #elif WHICH_BOARD == 1
 
-#define TX_PIN P0_7
 #define RX_PIN P0_5
+#define TX_PIN P0_7
 #define TX_INV_PIN P0_3
+
+#elif WHICH_BOARD == 2
+
+#define RX_PIN P0_26
+#define TX_PIN P0_23
+#define TX_INV_PIN P0_2
+
+#elif WHICH_BOARD == 3
+
+#define RX_PIN P0_13
+#define TX_PIN P0_26
+#define TX_INV_PIN P0_20
 
 #endif
 
@@ -46,7 +62,7 @@ class HalcyonBus {
 	std::array<uint8_t, 8> serialBuf{{0}};
 
 	uint8_t ourAddr = 0x21;
-	std::array<uint8_t, 7> ourState{{0x81, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00}};
+	std::array<uint8_t, 7> ourState{{0x81, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00}};
 	std::array<uint8_t, 8> txBuf{{0}};
 	Timeout txTimeout;
 
@@ -75,24 +91,12 @@ class HalcyonBus {
 				break;
 		}
 
-		// Update our own state if:
-		//   - (Another device is changing state,
-		//   - OR we don't have state),
-		//   - AND we're not changing state.
-		if ((stateBuf[1] & 0x08 || ourState[1] & 0x20) && !(ourState[1] & 0x08)) {
+		// Copy the primary thermostat unless we're broadcasting a change.
+		if (serialBuf[0] == 0x20 && !(ourState[1] & 0x08)) {
 			ourState[2] = stateBuf[2];
 			ourState[3] = stateBuf[3];
-			ourState[1] &= ~0x20;
+			ourState[4] = (stateBuf[1] & 0x10) ? 0x00 : 0x20;
 		}
-
-#if 0
-		// AC must be turned off at all times >:(
-		// (Yes, this is just a PoC/test.)
-		if ((stateBuf[2] & 0x01)) {
-			ourState[1] |= 0x08;
-			ourState[2] &= ~0x01;
-		}
-#endif
 
 		// Our time to shine!
 		if (stateBuf[0] == 0xa1)
@@ -273,42 +277,52 @@ class BLEService: HalcyonBus::Observer {
 
 static void invert_init()
 {
-    NRF_GPIOTE->CONFIG[0] = ( (GPIOTE_CONFIG_MODE_Event << GPIOTE_CONFIG_MODE_Pos) |
-                            (TX_PIN << GPIOTE_CONFIG_PSEL_Pos) |
-                            (GPIOTE_CONFIG_POLARITY_Toggle << GPIOTE_CONFIG_POLARITY_Pos));
-    
-    NRF_GPIOTE->CONFIG[1] = ( (GPIOTE_CONFIG_MODE_Task << GPIOTE_CONFIG_MODE_Pos) |
-                            (TX_INV_PIN << GPIOTE_CONFIG_PSEL_Pos) |
-                            (GPIOTE_CONFIG_POLARITY_Toggle << GPIOTE_CONFIG_POLARITY_Pos) |
-                            (GPIOTE_CONFIG_OUTINIT_High << GPIOTE_CONFIG_OUTINIT_Pos));  
-    
-    NRF_PPI->CH[0].EEP = (uint32_t)&NRF_GPIOTE->EVENTS_IN[0];
-    NRF_PPI->CH[1].TEP = (uint32_t)&NRF_GPIOTE->TASKS_OUT[1];
-    NRF_PPI->CHEN = (PPI_CHEN_CH0_Enabled << PPI_CHEN_CH0_Pos);
+	nrf_drv_gpiote_in_config_t in_cfg{};
+	in_cfg.is_watcher = true;
+	in_cfg.hi_accuracy = true;
+	in_cfg.sense = NRF_GPIOTE_POLARITY_TOGGLE;
+	nrf_drv_gpiote_in_init(TX_PIN, &in_cfg, NULL);
+
+	nrf_drv_gpiote_out_config_t out_cfg{};
+	out_cfg.init_state = NRF_GPIOTE_INITIAL_VALUE_LOW;
+	out_cfg.task_pin = true;
+	out_cfg.action = NRF_GPIOTE_POLARITY_TOGGLE;
+
+	nrf_drv_gpiote_out_init(TX_INV_PIN, &out_cfg);
+
+	nrf_ppi_channel_t inv_channel;
+	nrf_drv_ppi_channel_alloc(&inv_channel);
+	nrf_drv_ppi_channel_assign(
+		inv_channel,
+		nrf_drv_gpiote_in_event_addr_get(TX_PIN),
+		nrf_drv_gpiote_out_task_addr_get(TX_INV_PIN)
+	);
+
+	nrf_drv_ppi_channel_enable(inv_channel);
+	nrf_drv_gpiote_in_event_enable(TX_PIN, 0);
+	nrf_drv_gpiote_out_task_enable(TX_INV_PIN);
+}
+
+void on_ble_init(BLE::InitializationCompleteCallbackContext *context) {
+	sd_power_dcdc_mode_set(NRF_POWER_DCDC_ENABLE);
 }
 
 int main() {
-
 	nrf_drv_gpiote_init();
-	{
-		nrf_drv_gpiote_in_config_t config{};
-		config.sense = NRF_GPIOTE_POLARITY_TOGGLE;
-		nrf_drv_gpiote_in_init(TX_PIN, &config, NULL);
-	}
-	{
-	}
+	nrf_drv_ppi_init();
 
-	for (;;) {
-		nrf_delay_us(10000);
-		nrf_gpio_pin_toggle(TX_PIN);
-	}
+#ifdef P_GROUND
+	nrf_gpio_cfg_output(P_GROUND);
+#endif
 
 	BLE &ble = BLE::Instance();
 	ble.init();
 	ble.securityManager().init(false, false);
 
-	// HalcyonBus bridge(TX_PIN, RX_PIN);
-	// BLEService service(&bridge);
+	HalcyonBus bridge(TX_PIN, RX_PIN);
+	BLEService service(&bridge);
+
+	invert_init();
 
 	for (;;)
 		ble.processEvents();
