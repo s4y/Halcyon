@@ -263,8 +263,14 @@ class BLEService: HalcyonBus::Observer {
 		ble.gap().onDisconnection(this, &BLEService::didDisconnect);
 
 		ble.gattServer().addService(service);
+
+		ble.gap().accumulateAdvertisingPayload(
+			GapAdvertisingData::BREDR_NOT_SUPPORTED | GapAdvertisingData::LE_GENERAL_DISCOVERABLE
+		);
 		ble.gap().setDeviceName(reinterpret_cast<const uint8_t*>(kDeviceName));
 		ble.gap().setAppearance(GapAdvertisingData::Appearance(1537) /* HVAC -> Thermostat */);
+		ble.gap().setAdvertisingInterval(1000);
+		ble.gap().setAdvertisingType(GapAdvertisingParams::ADV_CONNECTABLE_UNDIRECTED);
 		ble.gap().startAdvertising();
 
 		stateCharacteristic.onWritten = [=](const std::array<uint8_t, 2> newval) {
