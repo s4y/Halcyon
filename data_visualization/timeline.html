@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<style>
+
+#datazone {
+	padding: 4em;
+	position: relative;
+}
+
+.datum {
+	position: absolute;
+	font: 14px monospace;
+	white-space: pre;
+	border: 1px solid black;
+	padding: 0.1em;
+	border-radius: 4px;
+	line-height: 1em;
+}
+
+.datum .different {
+	background: red;
+}
+
+</style>
+<div id="datazone"></div>
+<script>
+function show(data) {
+	let samples = data.trim().split('\n').map(line => {
+		const pieces = line.split(' ');
+		return {
+			ts: parseInt(pieces[0], 10),
+			data: pieces.slice(1).map(p => parseInt(p, 16))
+		};
+	});
+
+	let startts = samples[0].ts;
+
+	let lastSamples = {};
+	for (const sample of samples) {
+		const from = parseInt(sample.data[0], 16);
+		const el = document.createElement('div');
+		el.classList.add('datum');
+		el.style.left = `${(sample.ts - startts) / 7000}px`;
+		el.style.top = `${from/20}em`;
+		for (let i = 0; i < sample.data.length; i++) {
+			const byteEl = document.createElement('div');
+			byteEl.textContent = sample.data[i].toString(16).padStart(2, '0');
+			if (!lastSamples[from] || sample.data[i] != lastSamples[from].data[i])
+				byteEl.classList.add('different');
+			el.appendChild(byteEl);
+		}
+		datazone.appendChild(el);
+		lastSamples[from] = sample;
+	}
+}
+
+let stag = document.createElement('script');
+stag.src = `${location.hash.substr(1) || 'dataBuddy'}.js`;
+stag.onload = () => { show(data); };
+document.body.appendChild(stag);
+</script>
