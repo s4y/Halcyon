@@ -8,6 +8,7 @@ OPENOCD := openocd -f interface/cmsis-dap.cfg -f target/nrf52.cfg -c "transport 
 GCC_BIN := $(GCC)/bin
 
 TARGET := halcyon
+BOARD := BC832
 
 DEBUG_HEX = build/Debug/$(TARGET).hex
 RELEASE_HEX = build/Release/$(TARGET).hex
@@ -17,6 +18,7 @@ AR := $(GCC_BIN)/arm-none-eabi-ar
 CFLAGS := \
 	-Wall \
 	-Werror \
+	-Wno-expansion-to-defined \
 	-mthumb \
 	-mcpu=cortex-m4 \
 	-mfloat-abi=hard \
@@ -27,8 +29,8 @@ CFLAGS := \
 	-DSOFTDEVICE_PRESENT \
 	-DNRF_SD_BLE_API_VERSION=6 \
 	-DUSE_APP_CONFIG \
-	-DNO_VTOR_CONFIG \
-	-I. $(addprefix -I,$(NRF_INC_FOLDERS)) \
+	-DBOARD_$(BOARD) \
+	-I. $(addprefix -isystem,$(NRF_INC_FOLDERS)) \
 	-L$(SDK)/modules/nrfx/mdk \
 
 DEBUG_CFLAGS := \
@@ -43,11 +45,18 @@ RELEASE_CFLAGS := \
 	-Os \
 	# -flto \
 
+SUPPORT_HEADER_FILES := $(wildcard *.h)
+SUPPORT_SOURCE_FILES := $(filter $(patsubst %.h,%.c,$(SUPPORT_HEADER_FILES)),$(wildcard *.c))
+
 NRF_OBJ_FILES := $(NRF_SRC_FILES)
 NRF_OBJ_FILES := $(patsubst %.c,%.o,$(NRF_OBJ_FILES))
 NRF_OBJ_FILES := $(patsubst %.S,%.o,$(NRF_OBJ_FILES)) 
 
 default: $(RELEASE_HEX)
+
+ifndef VERBOSE
+.SILENT:
+endif
 
 __PHONY:
 
@@ -58,9 +67,9 @@ $(DEPS)/stamp:
 	@echo "Hit enter to continue, or ^C to bail." >&2
 	@read -p "? "
 	mkdir -p $(DEPS)
-	# cd $(DEPS); curl -LOJ https://developer.arm.com/-/media/Files/downloads/gnu-rm/7-2017q4/gcc-arm-none-eabi-7-2017-q4-major-mac.tar.bz2
+	cd $(DEPS); curl -LOJ https://developer.arm.com/-/media/Files/downloads/gnu-rm/7-2017q4/gcc-arm-none-eabi-7-2017-q4-major-mac.tar.bz2
 	cd $(DEPS); tar -xjf gcc-arm-none-eabi-7-2017-q4-major-mac.tar.bz2
-	# cd $(DEPS); curl -LOJ https://www.nordicsemi.com/eng/nordic/download_resource/59011/70/84826398/116085
+	cd $(DEPS); curl -LOJ https://www.nordicsemi.com/eng/nordic/download_resource/59011/70/84826398/116085
 	cd $(DEPS); unzip -q nRF5_SDK_15.0.0_a53641a.zip
 	touch $(DEPS)/stamp
 
@@ -98,6 +107,8 @@ debug: build/Debug/$(TARGET).out upload __PHONY
 	$(GCC_BIN)/arm-none-eabi-objcopy -O ihex "$<" "$@"
 
 define builddir
+.PRECIOUS: $(1)/$$(SDK)/%.o
+
 $(1)/$$(SDK)/%.o: $$(SDK)/%.c app_config.h Makefile | $(DEPS)/stamp
 	@mkdir -p $$(dir $$@)
 	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
@@ -106,9 +117,9 @@ $(1)/$$(SDK)/%.o: $$(SDK)/%.S app_config.h Makefile | $(DEPS)/stamp
 	@mkdir -p $$(dir $$@)
 	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
 
-$(1)/%.out: %.ld %.c $$(addprefix $(1)/,$$(NRF_OBJ_FILES))
+$(1)/%.out: %.ld %.c $$(SUPPORT_HEADER_FILES) $$(SUPPORT_SOURCE_FILES) $$(addprefix $(1)/,$$(NRF_OBJ_FILES))
 	@mkdir -p $$(dir $$@)
-	$$(CC) -o "$$@" $(2) $$(CFLAGS) -L$(1) -Wl,-T,$$^
+	$$(CC) -o "$$@" $(2) $$(CFLAGS) -Wpedantic -L$(1) -Wl,-T,$$(filter-out %.h,$$^)
 endef
 
 $(eval $(call builddir,build/Debug,$(DEBUG_CFLAGS)))

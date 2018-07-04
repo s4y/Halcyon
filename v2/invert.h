@@ -1,0 +1,1 @@
+void invert_init();

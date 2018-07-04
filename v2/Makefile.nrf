@@ -2,7 +2,6 @@
 NRF_SRC_FILES += \
   $(SDK)/components/ble/ble_advertising/ble_advertising.c \
   $(SDK)/components/ble/ble_link_ctx_manager/ble_link_ctx_manager.c \
-  $(SDK)/components/ble/ble_services/ble_nus/ble_nus.c \
   $(SDK)/components/ble/common/ble_advdata.c \
   $(SDK)/components/ble/common/ble_conn_params.c \
   $(SDK)/components/ble/common/ble_conn_state.c \
@@ -77,8 +76,6 @@ NRF_INC_FOLDERS += \
   $(SDK)/components/ble/ble_services/ble_lbs \
   $(SDK)/components/ble/ble_services/ble_lbs_c \
   $(SDK)/components/ble/ble_services/ble_lls \
-  $(SDK)/components/ble/ble_services/ble_nus \
-  $(SDK)/components/ble/ble_services/ble_nus_c \
   $(SDK)/components/ble/ble_services/ble_rscs \
   $(SDK)/components/ble/ble_services/ble_rscs_c \
   $(SDK)/components/ble/ble_services/ble_tps \
