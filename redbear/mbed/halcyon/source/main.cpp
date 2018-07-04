@@ -10,7 +10,7 @@ extern "C" {
 #include <array>
 #include <functional>
 
-#define WHICH_BOARD 3
+#define WHICH_BOARD 2
 
 #if WHICH_BOARD == 0
 
@@ -27,14 +27,18 @@ extern "C" {
 #elif WHICH_BOARD == 2
 
 #define RX_PIN P0_26
-#define TX_PIN P0_23
+#define TX_PIN P0_12
 #define TX_INV_PIN P0_2
+#define PAIR_PIN P0_18
+#define CLEAR_PIN P0_13
 
 #elif WHICH_BOARD == 3
 
 #define RX_PIN P0_13
-#define TX_PIN P0_26
+#define TX_PIN P0_11
 #define TX_INV_PIN P0_20
+#define PAIR_PIN P0_26
+#define CLEAR_PIN P0_27
 
 #endif
 
@@ -281,8 +285,7 @@ class BLEService: HalcyonBus::Observer {
 	}
 };
 
-static void invert_init()
-{
+static void invert_init() {
 	nrf_drv_gpiote_in_config_t in_cfg{};
 	in_cfg.is_watcher = true;
 	in_cfg.hi_accuracy = true;
@@ -309,21 +312,53 @@ static void invert_init()
 	nrf_drv_gpiote_out_task_enable(TX_INV_PIN);
 }
 
+class SecurityManagerEventHandler: public SecurityManager::EventHandler {
+	void pairingRequest(ble::connection_handle_t connectionHandle) override {
+		if (nrf_gpio_pin_read(PAIR_PIN) == 0)
+			BLE::Instance().securityManager().acceptPairingRequest(connectionHandle);
+		else
+			BLE::Instance().securityManager().cancelPairingRequest(connectionHandle);
+	}
+};
+
+#if 0
 void on_ble_init(BLE::InitializationCompleteCallbackContext *context) {
 	sd_power_dcdc_mode_set(NRF_POWER_DCDC_ENABLE);
 }
+#endif
 
 int main() {
 	nrf_drv_gpiote_init();
 	nrf_drv_ppi_init();
 
-#ifdef P_GROUND
-	nrf_gpio_cfg_output(P_GROUND);
-#endif
+	nrf_gpio_cfg_input(PAIR_PIN, NRF_GPIO_PIN_PULLUP);
+	nrf_gpio_cfg_input(CLEAR_PIN, NRF_GPIO_PIN_PULLUP);
 
 	BLE &ble = BLE::Instance();
 	ble.init();
-	ble.securityManager().init(false, false);
+
+	nrf_gpio_cfg_output(P0_2);
+	for(;;nrf_delay_us(100000))nrf_gpio_pin_toggle(P0_2);
+
+	SecurityManager &sm = ble.securityManager();
+
+	// Bonding only works right now if I apply the patch from here:
+	// https://github.com/ARMmbed/mbed-os/issues/6812
+	//
+	// I'm keeping bonding disabled (the first `false` parameter) and
+	// temporarily making a build with it set to `true` when I want to add new
+	// devices, because runtime control is broken in mbed (see below).
+	sm.init(true, false);
+
+	// This is all apparently a no-op on the nRF5 platform?! mbed just doesn't
+	// implement it. I want to get away from mbed. Filed:
+	// https://github.com/ARMmbed/mbed-os/issues/6858
+	SecurityManagerEventHandler smeh;
+	sm.setSecurityManagerEventHandler(&smeh);
+	sm.setPairingRequestAuthorisation(true);
+
+	if (nrf_gpio_pin_read(CLEAR_PIN) == 0)
+		sm.purgeAllBondingState();
 
 	HalcyonBus bridge(TX_PIN, RX_PIN);
 	BLEService service(&bridge);
