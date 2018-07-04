@@ -124,3 +124,11 @@ endef
 
 $(eval $(call builddir,build/Debug,$(DEBUG_CFLAGS)))
 $(eval $(call builddir,build/Release,$(RELEASE_CFLAGS)))
+
+%/.ycm_debug_flags: __PHONY
+	@echo \
+		--sysroot=$(GCC)/arm-none-eabi \
+		--target=armv7m-none-eabi \
+		$(CFLAGS) \
+		$(DEBUG_CFLAGS) \
+		-x c
