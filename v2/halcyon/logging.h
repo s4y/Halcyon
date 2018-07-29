@@ -3,6 +3,8 @@
 #include "nrf_log.h"
 #include "nrf_log_backend_serial.h"
 #include "nrf_log_ctrl.h"
+#include "nrf_gpio.h"
+#include "nrf_delay.h"
 
 #include <inttypes.h>
 
@@ -46,10 +48,7 @@ void log_init() {
 #endif
 }
 
-#if DEBUG
-void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info) {
-	printf("!!! App fault: id: 0x%08lx, pc = %"PRIu32", info = %"PRIu32"\n", id, pc, info);
+__WEAK void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info) {
 	NRF_LOG_FLUSH();
+	NVIC_SystemReset();
 }
-#endif
-

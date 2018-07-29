@@ -16,6 +16,7 @@ NRF_SRC_FILES += \
   $(SDK)/components/libraries/bsp/bsp.c \
   $(SDK)/components/libraries/button/app_button.c \
   $(SDK)/components/libraries/experimental_log/src/nrf_log_backend_rtt.c \
+  $(SDK)/components/libraries/experimental_log/src/nrf_log_backend_uart.c \
   $(SDK)/components/libraries/experimental_log/src/nrf_log_backend_serial.c \
   $(SDK)/components/libraries/experimental_log/src/nrf_log_default_backends.c \
   $(SDK)/components/libraries/experimental_log/src/nrf_log_frontend.c \
@@ -50,6 +51,11 @@ NRF_SRC_FILES += \
   $(SDK)/modules/nrfx/drivers/src/prs/nrfx_prs.c \
   $(SDK)/modules/nrfx/mdk/gcc_startup_nrf52.S \
   $(SDK)/modules/nrfx/mdk/system_nrf52.c \
+
+NRF_DEBUG_SRC_FILES += \
+  $(SDK)/external/segger_rtt/SEGGER_RTT.c \
+  $(SDK)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
+  $(SDK)/external/segger_rtt/SEGGER_RTT_printf.c \
 
 # Include folders common to all targets
 NRF_INC_FOLDERS += \
@@ -177,6 +183,7 @@ NRF_INC_FOLDERS += \
   $(SDK)/components/softdevice/s132/headers/nrf52 \
   $(SDK)/components/toolchain/cmsis/include \
   $(SDK)/external/fprintf \
+  $(SDK)/external/segger_rtt \
   $(SDK)/integration/nrfx \
   $(SDK)/integration/nrfx/legacy \
   $(SDK)/modules/nrfx \

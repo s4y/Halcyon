@@ -24,6 +24,7 @@ CFLAGS := \
 	-mfloat-abi=hard \
 	-mfpu=fpv4-sp-d16 \
 	-DNRF52 \
+	-DS132 \
 	-DNRF52832_XXAA \
 	-DBOARD_CUSTOM \
 	-DSOFTDEVICE_PRESENT \
@@ -45,8 +46,8 @@ RELEASE_CFLAGS := \
 	-Os \
 	# -flto \
 
-SUPPORT_HEADER_FILES := $(wildcard *.h)
-SUPPORT_SOURCE_FILES := $(filter $(patsubst %.h,%.c,$(SUPPORT_HEADER_FILES)),$(wildcard *.c))
+SUPPORT_HEADER_FILES := $(wildcard *.h) $(wildcard halcyon/*.h)
+SUPPORT_SOURCE_FILES := $(wildcard halcyon/*.c)
 
 NRF_OBJ_FILES := $(NRF_SRC_FILES)
 NRF_OBJ_FILES := $(patsubst %.c,%.o,$(NRF_OBJ_FILES))
@@ -82,7 +83,10 @@ halt: __PHONY
 reset: __PHONY
 	$(OPENOCD) -c 'init;reset;exit'
 
-semihost: $(DEBUG_HEX) __PHONY
+openocd: __PHONY
+	$(OPENOCD) -c 'init'
+
+run-attached: $(DEBUG_HEX) __PHONY
 	$(OPENOCD) -c 'init;reset halt;program $< verify;arm semihosting enable;reset'
 
 upload-softdevice: __PHONY
@@ -94,8 +98,8 @@ upload: $(RELEASE_HEX) __PHONY
 run: $(RELEASE_HEX) __PHONY
 	$(OPENOCD) -c 'init;reset halt;program $< verify reset exit'
 
-debugserver: build/Debug/$(TARGET).out upload __PHONY
-	$(OPENOCD) -c "init; arm semihosting enable; reset halt"
+debugserver: $(DEBUG_HEX) __PHONY
+	$(OPENOCD) -c 'init;reset halt;program $< verify;arm semihosting enable'
 
 debugclient: build/Debug/$(TARGET).out __PHONY
 	$(GCC_BIN)/arm-none-eabi-gdb $< -ex 'target extended-remote 127.0.0.1:3333'
