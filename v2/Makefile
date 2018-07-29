@@ -4,7 +4,7 @@ SDK := $(DEPS)/nRF5_SDK_15.0.0_a53641a
 
 include Makefile.nrf
 
-OPENOCD := openocd -f interface/cmsis-dap.cfg -f target/nrf52.cfg -c "transport select swd"
+OPENOCD := openocd -f interface/cmsis-dap.cfg -c "transport select swd" -f target/nrf52.cfg
 GCC_BIN := $(GCC)/bin
 
 TARGET := halcyon
