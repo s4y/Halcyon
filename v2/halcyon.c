@@ -11,7 +11,6 @@
 #include "nrf_log_default_backends.h"
 #include "nrf_pwr_mgmt.h"
 #include "nrf_sdh.h"
-#include "nrf_sdh_soc.h"
 
 #include "halcyon_boards.h"
 #include "halcyon/bridge.h"
@@ -28,13 +27,6 @@ int main(void) {
 	halcyon_bridge_t bridge = {NRFX_UARTE_INSTANCE(0)};
 	halcyon_bridge_init(&bridge);
 	invert_init();
-
-	// const ble_uuid128_t vendor_uuid = { .uuid128 = {
-	// 	0x79, 0x09, 0xe6, 0x9a, 0x90, 0x4d, 0x46, 0x19,
-	// 	0x93, 0xac, 0x72, 0x2d, 0x1d, 0x13, 0xc7, 0xab,
-	// } };
-	// uint8_t uuid_type;
-	// APP_ERROR_CHECK(sd_ble_uuid_vs_add(&vendor_uuid, &uuid_type));
 
 	halcyon_ble_characteristic_t characteristics[] = {
 		{

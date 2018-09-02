@@ -34,75 +34,30 @@
 NRF_BLE_GATT_DEF(m_gatt);
 BLE_ADVERTISING_DEF(m_advertising);
 
-typedef struct {
-	uint16_t conn_handle;
-	ble_gap_enc_key_t enc_key;
-} halcyon_peer_t;
-
-halcyon_peer_t *peer_get(uint16_t conn_handle) {
-	static halcyon_peer_t peers[NRF_SDH_BLE_PERIPHERAL_LINK_COUNT] = {{0}};
-	NRF_LOG_INFO("Peers:");
-	for (halcyon_peer_t *peer = peers, *end = peers + NRF_SDH_BLE_PERIPHERAL_LINK_COUNT; peer < end; peer++)
-		NRF_LOG_INFO("- %d", peer->conn_handle);
-	for (halcyon_peer_t *peer = peers, *end = peers + NRF_SDH_BLE_PERIPHERAL_LINK_COUNT; peer < end; peer++) {
-		if (peer->conn_handle == conn_handle)
-			return peer;
-	}
-	return NULL;
-}
-
-halcyon_ble_config_t* g_config;
-
 static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
 	switch (p_ble_evt->header.evt_id) {
-		case BLE_GAP_EVT_CONNECTED:
-			{
-				halcyon_peer_t *peer = peer_get(0);
-				if (!peer)
-					break;
-				peer->conn_handle = p_ble_evt->evt.gap_evt.conn_handle + 1;
-			}
-			break;
-		case BLE_GAP_EVT_DISCONNECTED:
-			{
-				halcyon_peer_t *peer = peer_get(p_ble_evt->evt.gap_evt.conn_handle + 1);
-				if (!peer)
-					break;
-				*peer = (halcyon_peer_t){0};
-			}
-			break;
 		case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
-			{
-				const ble_gap_phys_t phys = {
+			APP_ERROR_CHECK(sd_ble_gap_phy_update(
+				p_ble_evt->evt.gap_evt.conn_handle,
+				&(ble_gap_phys_t){
 					.rx_phys = BLE_GAP_PHY_AUTO,
 					.tx_phys = BLE_GAP_PHY_AUTO,
-				};
-				APP_ERROR_CHECK(sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys));
-			}
+				}
+			));
 			break;
 		case BLE_GAP_EVT_CONN_PARAM_UPDATE_REQUEST:
 			APP_ERROR_CHECK(sd_ble_gap_conn_param_update(p_ble_evt->evt.gap_evt.conn_handle, &p_ble_evt->evt.gap_evt.params.conn_param_update_request.conn_params));
 			break;
 		case BLE_GATTS_EVT_SYS_ATTR_MISSING:
-			// No system attributes have been stored.
 			APP_ERROR_CHECK(sd_ble_gatts_sys_attr_set(p_ble_evt->evt.gap_evt.conn_handle, NULL, 0, 0));
 			break;
 		case BLE_GATTC_EVT_TIMEOUT:
-			// Disconnect on GATT Client timeout event.
 			APP_ERROR_CHECK(sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION));
 			break;
 		case BLE_GATTS_EVT_TIMEOUT:
-			// Disconnect on GATT Server timeout event.
 			APP_ERROR_CHECK(sd_ble_gap_disconnect(p_ble_evt->evt.gatts_evt.conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION));
 			break;
-
-		// case BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST:
-		// case BLE_GAP_EVT_DATA_LENGTH_UPDATE:
-        // case BLE_GATTC_EVT_EXCHANGE_MTU_RSP:
-		// 	break;
-
 		default:
-			// NRF_LOG_ERROR("Unhandled event: 0x%x", p_ble_evt->header.evt_id);
 			break;
 	}
 }
@@ -110,24 +65,10 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
 static void pm_evt_handler(pm_evt_t const * p_evt) {
 	pm_handler_on_pm_evt(p_evt);
 	pm_handler_flash_clean(p_evt);
-
-	// switch (p_evt->evt_id) {
-	// 	case PM_EVT_PEERS_DELETE_SUCCEEDED:
-	// 		advertising_start(false);
-	// 		break;
-	// 	default:
-	// 		break;
-	// }
 }
 
 static void conn_params_error_handler(uint32_t nrf_error) {
-    APP_ERROR_HANDLER(nrf_error);
-}
-
-void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt) {
-	NRF_LOG_DEBUG("ATT MTU exchange completed. central 0x%x peripheral 0x%x",
-			p_gatt->att_mtu_desired_central,
-			p_gatt->att_mtu_desired_periph);
+	APP_ERROR_HANDLER(nrf_error);
 }
 
 void halcyon_ble_init(halcyon_ble_config_t* config) {
@@ -137,8 +78,7 @@ void halcyon_ble_init(halcyon_ble_config_t* config) {
 		APP_ERROR_CHECK(nrf_sdh_ble_enable(&ram_start));
 	}
 
-	g_config = config;
-    NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
+	NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
 
 	{
 		ble_gap_conn_sec_mode_t sec_mode;
@@ -156,8 +96,8 @@ void halcyon_ble_init(halcyon_ble_config_t* config) {
 		APP_ERROR_CHECK(sd_ble_gap_ppcp_set(&gap_conn_params));
 	}
 
-    APP_ERROR_CHECK(nrf_ble_gatt_init(&m_gatt, gatt_evt_handler));
-    APP_ERROR_CHECK(nrf_ble_gatt_att_mtu_periph_set(&m_gatt, NRF_SDH_BLE_GATT_MAX_MTU_SIZE));
+	APP_ERROR_CHECK(nrf_ble_gatt_init(&m_gatt, NULL));
+	APP_ERROR_CHECK(nrf_ble_gatt_att_mtu_periph_set(&m_gatt, NRF_SDH_BLE_GATT_MAX_MTU_SIZE));
 
 	{
 		ble_advertising_init_t init = {
@@ -198,7 +138,7 @@ void halcyon_ble_init(halcyon_ble_config_t* config) {
 		APP_ERROR_CHECK(pm_init());
 
 		if (config->allow_bonding) {
-			ble_gap_sec_params_t sec_param = {
+			APP_ERROR_CHECK(pm_sec_params_set(&(ble_gap_sec_params_t){
 				.bond = 1,
 				.io_caps = BLE_GAP_IO_CAPS_NONE,
 				.min_key_size = 7,
@@ -207,17 +147,14 @@ void halcyon_ble_init(halcyon_ble_config_t* config) {
 				.kdist_own.id   = 1,
 				.kdist_peer.enc = 1,
 				.kdist_peer.id  = 1,
-			};
-
-			APP_ERROR_CHECK(pm_sec_params_set(&sec_param));
+			}));
 		} else {
 			APP_ERROR_CHECK(pm_sec_params_set(NULL));
 		}
-
 		APP_ERROR_CHECK(pm_register(pm_evt_handler));
 		if (config->delete_bonds)
 			APP_ERROR_CHECK(pm_peers_delete());
 	}
 
-    APP_ERROR_CHECK(ble_advertising_start(&m_advertising, BLE_ADV_MODE_SLOW));
+	APP_ERROR_CHECK(ble_advertising_start(&m_advertising, BLE_ADV_MODE_SLOW));
 }
