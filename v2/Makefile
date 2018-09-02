@@ -1,6 +1,6 @@
 DEPS := deps
-GCC := $(DEPS)/gcc-arm-none-eabi-7-2017-q4-major
-SDK := $(DEPS)/nRF5_SDK_15.0.0_a53641a
+GCC := $(DEPS)/gcc-arm-none-eabi-7-2018-q2-update
+SDK := $(DEPS)/nRF5_SDK_15.1.0_a8c0c4d
 
 include Makefile.nrf
 
@@ -44,14 +44,18 @@ DEBUG_CFLAGS := \
 RELEASE_CFLAGS := \
 	--specs=nosys.specs \
 	-Os \
-	# -flto \
 
 SUPPORT_HEADER_FILES := $(wildcard *.h) $(wildcard halcyon/*.h)
 SUPPORT_SOURCE_FILES := $(wildcard halcyon/*.c)
 
 NRF_OBJ_FILES := $(NRF_SRC_FILES)
 NRF_OBJ_FILES := $(patsubst %.c,%.o,$(NRF_OBJ_FILES))
-NRF_OBJ_FILES := $(patsubst %.S,%.o,$(NRF_OBJ_FILES)) 
+NRF_OBJ_FILES := $(patsubst %.S,%.o,$(NRF_OBJ_FILES))
+
+NRF_DEBUG_OBJ_FILES := $(NRF_DEBUG_SRC_FILES)
+NRF_DEBUG_OBJ_FILES := $(patsubst %.c,%.o,$(NRF_DEBUG_OBJ_FILES))
+NRF_DEBUG_OBJ_FILES := $(patsubst %.S,%.o,$(NRF_DEBUG_OBJ_FILES))
+NRF_DEBUG_OBJ_FILES := $(NRF_OBJ_FILES) $(NRF_DEBUG_OBJ_FILES)
 
 default: $(RELEASE_HEX)
 
@@ -61,17 +65,17 @@ endif
 
 __PHONY:
 
-$(DEPS)/%:: $(DEPS)/stamp
+$(NRF_SRC_FILES) : $(DEPS)/stamp
 
 $(DEPS)/stamp:
-	@echo "Gotta fetch some dependencies. This'll take about 270MB." >&2
+	@echo "Gotta fetch some dependencies. This'll take about 230MB." >&2
 	@echo "Hit enter to continue, or ^C to bail." >&2
 	@read -p "? "
 	mkdir -p $(DEPS)
-	cd $(DEPS); curl -LOJ https://developer.arm.com/-/media/Files/downloads/gnu-rm/7-2017q4/gcc-arm-none-eabi-7-2017-q4-major-mac.tar.bz2
-	cd $(DEPS); tar -xjf gcc-arm-none-eabi-7-2017-q4-major-mac.tar.bz2
-	cd $(DEPS); curl -LOJ https://www.nordicsemi.com/eng/nordic/download_resource/59011/70/84826398/116085
-	cd $(DEPS); unzip -q nRF5_SDK_15.0.0_a53641a.zip
+	cd $(DEPS) && curl -LOJ https://developer.arm.com/-/media/Files/downloads/gnu-rm/7-2018q2/gcc-arm-none-eabi-7-2018-q2-update-mac.tar.bz2
+	cd $(DEPS) && tar -xjf gcc-arm-none-eabi-7-2018-q2-update-mac.tar.bz2
+	cd $(DEPS) && curl -LOJ https://www.nordicsemi.com/eng/nordic/download_resource/59011/84/72918940/116085
+	cd $(DEPS) && unzip -q -d nRF5_SDK_15.1.0_a8c0c4d nRF5_SDK_15.1.0_a8c0c4d.zip
 	touch $(DEPS)/stamp
 
 nuke: __PHONY
@@ -84,13 +88,13 @@ reset: __PHONY
 	$(OPENOCD) -c 'init;reset;exit'
 
 openocd: __PHONY
-	$(OPENOCD) -c 'init'
+	$(OPENOCD) -c 'init' $(ARGS)
 
 run-attached: $(DEBUG_HEX) __PHONY
 	$(OPENOCD) -c 'init;reset halt;program $< verify;arm semihosting enable;reset'
 
 upload-softdevice: __PHONY
-	$(OPENOCD) -c 'init;reset halt;program $(SDK)/components/softdevice/s132/hex/s132_nrf52_6.0.0_softdevice.hex reset verify exit'
+	$(OPENOCD) -c 'init;reset halt;program $(SDK)/components/softdevice/s132/hex/s132_nrf52_6.1.0_softdevice.hex reset verify exit'
 
 upload: $(RELEASE_HEX) __PHONY
 	$(OPENOCD) -c 'init;reset halt;program $< verify exit'
@@ -113,21 +117,22 @@ debug: build/Debug/$(TARGET).out upload __PHONY
 define builddir
 .PRECIOUS: $(1)/$$(SDK)/%.o
 
-$(1)/$$(SDK)/%.o: $$(SDK)/%.c app_config.h Makefile | $(DEPS)/stamp
+$(1)/$$(SDK)/%.o: $$(SDK)/%.c app_config.h Makefile
 	@mkdir -p $$(dir $$@)
 	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
 
-$(1)/$$(SDK)/%.o: $$(SDK)/%.S app_config.h Makefile | $(DEPS)/stamp
+$(1)/$$(SDK)/%.o: $$(SDK)/%.S app_config.h Makefile
 	@mkdir -p $$(dir $$@)
 	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
 
-$(1)/%.out: %.ld %.c $$(SUPPORT_HEADER_FILES) $$(SUPPORT_SOURCE_FILES) $$(addprefix $(1)/,$$(NRF_OBJ_FILES))
+$(1)/%.out: %.ld %.c $$(SUPPORT_HEADER_FILES) $$(SUPPORT_SOURCE_FILES) $$(addprefix $(1)/,$(3))
+
 	@mkdir -p $$(dir $$@)
 	$$(CC) -o "$$@" $(2) $$(CFLAGS) -Wpedantic -L$(1) -Wl,-T,$$(filter-out %.h,$$^)
 endef
 
-$(eval $(call builddir,build/Debug,$(DEBUG_CFLAGS)))
-$(eval $(call builddir,build/Release,$(RELEASE_CFLAGS)))
+$(eval $(call builddir,build/Debug,$(DEBUG_CFLAGS),$(NRF_DEBUG_OBJ_FILES)))
+$(eval $(call builddir,build/Release,$(RELEASE_CFLAGS),$(NRF_OBJ_FILES)))
 
 %/.ycm_debug_flags: __PHONY
 	@echo \

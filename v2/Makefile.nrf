@@ -15,17 +15,12 @@ NRF_SRC_FILES += \
   $(SDK)/components/libraries/balloc/nrf_balloc.c \
   $(SDK)/components/libraries/bsp/bsp.c \
   $(SDK)/components/libraries/button/app_button.c \
-  $(SDK)/components/libraries/experimental_log/src/nrf_log_backend_rtt.c \
-  $(SDK)/components/libraries/experimental_log/src/nrf_log_backend_uart.c \
-  $(SDK)/components/libraries/experimental_log/src/nrf_log_backend_serial.c \
-  $(SDK)/components/libraries/experimental_log/src/nrf_log_default_backends.c \
-  $(SDK)/components/libraries/experimental_log/src/nrf_log_frontend.c \
-  $(SDK)/components/libraries/experimental_log/src/nrf_log_str_formatter.c \
-  $(SDK)/components/libraries/experimental_memobj/nrf_memobj.c \
   $(SDK)/components/libraries/experimental_section_vars/nrf_section_iter.c \
   $(SDK)/components/libraries/fstorage/nrf_fstorage.c \
   $(SDK)/components/libraries/fstorage/nrf_fstorage_sd.c \
   $(SDK)/components/libraries/hardfault/hardfault_implementation.c \
+  $(SDK)/components/libraries/log/src/nrf_log_frontend.c \
+  $(SDK)/components/libraries/memobj/nrf_memobj.c \
   $(SDK)/components/libraries/pwr_mgmt/nrf_pwr_mgmt.c \
   $(SDK)/components/libraries/scheduler/app_scheduler.c \
   $(SDK)/components/libraries/strerror/nrf_strerror.c \
@@ -53,6 +48,11 @@ NRF_SRC_FILES += \
   $(SDK)/modules/nrfx/mdk/system_nrf52.c \
 
 NRF_DEBUG_SRC_FILES += \
+  $(SDK)/components/libraries/log/src/nrf_log_backend_rtt.c \
+  $(SDK)/components/libraries/log/src/nrf_log_backend_serial.c \
+  $(SDK)/components/libraries/log/src/nrf_log_default_backends.c \
+  $(SDK)/components/libraries/log/src/nrf_log_str_formatter.c \
+  $(SDK)/components/libraries/ringbuf/nrf_ringbuf.c \
   $(SDK)/external/segger_rtt/SEGGER_RTT.c \
   $(SDK)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
   $(SDK)/external/segger_rtt/SEGGER_RTT_printf.c \
@@ -106,9 +106,6 @@ NRF_INC_FOLDERS += \
   $(SDK)/components/libraries/csense_drv \
   $(SDK)/components/libraries/delay \
   $(SDK)/components/libraries/ecc \
-  $(SDK)/components/libraries/experimental_log \
-  $(SDK)/components/libraries/experimental_log/src \
-  $(SDK)/components/libraries/experimental_memobj \
   $(SDK)/components/libraries/experimental_mpu \
   $(SDK)/components/libraries/experimental_ringbuf \
   $(SDK)/components/libraries/experimental_section_vars \
@@ -122,12 +119,16 @@ NRF_INC_FOLDERS += \
   $(SDK)/components/libraries/hardfault \
   $(SDK)/components/libraries/hci \
   $(SDK)/components/libraries/led_softblink \
+  $(SDK)/components/libraries/log \
+  $(SDK)/components/libraries/log/src \
   $(SDK)/components/libraries/low_power_pwm \
   $(SDK)/components/libraries/mem_manager \
+  $(SDK)/components/libraries/memobj \
   $(SDK)/components/libraries/mutex \
   $(SDK)/components/libraries/pwm \
   $(SDK)/components/libraries/pwr_mgmt \
   $(SDK)/components/libraries/queue \
+  $(SDK)/components/libraries/ringbuf \
   $(SDK)/components/libraries/scheduler \
   $(SDK)/components/libraries/sdcard \
   $(SDK)/components/libraries/slip \
@@ -148,7 +149,6 @@ NRF_INC_FOLDERS += \
   $(SDK)/components/libraries/usbd/class/hid/mouse \
   $(SDK)/components/libraries/usbd/class/msc \
   $(SDK)/components/libraries/usbd/config \
-  $(SDK)/config/nrf52832/config \
   $(SDK)/components/libraries/util \
   $(SDK)/components/nfc/ndef/conn_hand_parser \
   $(SDK)/components/nfc/ndef/conn_hand_parser/ac_rec_parser \
@@ -182,6 +182,7 @@ NRF_INC_FOLDERS += \
   $(SDK)/components/softdevice/s132/headers \
   $(SDK)/components/softdevice/s132/headers/nrf52 \
   $(SDK)/components/toolchain/cmsis/include \
+  $(SDK)/config/nrf52832/config \
   $(SDK)/external/fprintf \
   $(SDK)/external/segger_rtt \
   $(SDK)/integration/nrfx \
