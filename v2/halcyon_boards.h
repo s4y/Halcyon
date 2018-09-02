@@ -1,3 +1,5 @@
+#define DEVICE_NAME "Halcyon Bridge"
+
 #if defined(BOARD_BLE_NANO_2)
 
 #define RX_PIN NRF_GPIO_PIN_MAP(0, 5)

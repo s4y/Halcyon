@@ -1,8 +1,9 @@
+#include <inttypes.h>
+
+#include "app_config.h"
+
 #include "nrf_log.h"
 #include "nrf_gpio.h"
-#include "nrfx_uarte.h"
-
-#include <inttypes.h>
 
 #include "bridge.h"
 #include "halcyon_boards.h"
@@ -52,7 +53,6 @@ static void halcyon_bridge_handle_uarte_event(
 }
 
 void halcyon_bridge_init(halcyon_bridge_t* bridge) {
-
 	// Set up the UART, which interfaces with the bus.
 	nrfx_uarte_config_t cfg = NRFX_UARTE_DEFAULT_CONFIG;
 	cfg.pseltxd = TX_PIN;

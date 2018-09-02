@@ -1,17 +1,21 @@
-#include "app_config.h"
+#include "halcyon_ble.h"
 
-#include "ble.h"
+#include "app_config.h"
+#include "halcyon_boards.h"
 
 #include "nordic_common.h"
 
-#include "ble_gatts.h"
-#include "ble_advertising.h"
 #include "app_error.h"
 #include "app_timer.h"
+#include "ble.h"
+#include "ble_advertising.h"
 #include "ble_conn_params.h"
-#include "logging.h"
+#include "ble_gatts.h"
 #include "nrf_ble_gatt.h"
+#include "nrf_log.h"
+#include "nrf_sdh.h"
 #include "nrf_sdh_ble.h"
+#include "nrf_sdh_soc.h"
 #include "softdevice/s132/headers/ble.h"
 
 #define APP_BLE_CONN_CFG_TAG 1
@@ -105,7 +109,7 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
 			p_gatt->att_mtu_desired_periph);
 }
 
-void ble_init() {
+void halcyon_ble_init(halcyon_ble_config_t* config) {
 	{
 		uint32_t ram_start = 0;
 		APP_ERROR_CHECK(nrf_sdh_ble_default_cfg_set(APP_BLE_CONN_CFG_TAG, &ram_start));
@@ -120,7 +124,7 @@ void ble_init() {
 
 		APP_ERROR_CHECK(sd_ble_gap_device_name_set(&sec_mode,
 					(const uint8_t *) DEVICE_NAME,
-					strlen(DEVICE_NAME) /* sizeof(DEVICE_NAME) / sizeof(*DEVICE_NAME) - 1 */));
+					strlen(DEVICE_NAME)));
 
 		ble_gap_conn_params_t   gap_conn_params = {
 			.min_conn_interval = MIN_CONN_INTERVAL,
