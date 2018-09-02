@@ -8,6 +8,23 @@ NRF_SRC_FILES += \
   $(SDK)/components/ble/common/ble_srv_common.c \
   $(SDK)/components/ble/nrf_ble_gatt/nrf_ble_gatt.c \
   $(SDK)/components/ble/nrf_ble_qwr/nrf_ble_qwr.c \
+  $(SDK)/components/ble/peer_manager/auth_status_tracker.c \
+  $(SDK)/components/ble/peer_manager/gatt_cache_manager.c \
+  $(SDK)/components/ble/peer_manager/gatt_cache_manager.c \
+  $(SDK)/components/ble/peer_manager/gatts_cache_manager.c \
+  $(SDK)/components/ble/peer_manager/id_manager.c \
+  $(SDK)/components/ble/peer_manager/nrf_ble_lesc.c \
+  $(SDK)/components/ble/peer_manager/peer_data_storage.c \
+  $(SDK)/components/ble/peer_manager/peer_database.c \
+  $(SDK)/components/ble/peer_manager/peer_database.c \
+  $(SDK)/components/ble/peer_manager/peer_id.c \
+  $(SDK)/components/ble/peer_manager/peer_manager.c \
+  $(SDK)/components/ble/peer_manager/peer_manager.c \
+  $(SDK)/components/ble/peer_manager/peer_manager_handler.c \
+  $(SDK)/components/ble/peer_manager/peer_manager_handler.c \
+  $(SDK)/components/ble/peer_manager/pm_buffer.c \
+  $(SDK)/components/ble/peer_manager/security_dispatcher.c \
+  $(SDK)/components/ble/peer_manager/security_manager.c \
   $(SDK)/components/boards/boards.c \
   $(SDK)/components/libraries/atomic/nrf_atomic.c \
   $(SDK)/components/libraries/atomic_fifo/nrf_atfifo.c \
@@ -16,6 +33,7 @@ NRF_SRC_FILES += \
   $(SDK)/components/libraries/bsp/bsp.c \
   $(SDK)/components/libraries/button/app_button.c \
   $(SDK)/components/libraries/experimental_section_vars/nrf_section_iter.c \
+  $(SDK)/components/libraries/fds/fds.c \
   $(SDK)/components/libraries/fstorage/nrf_fstorage.c \
   $(SDK)/components/libraries/fstorage/nrf_fstorage_sd.c \
   $(SDK)/components/libraries/hardfault/hardfault_implementation.c \
