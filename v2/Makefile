@@ -1,6 +1,7 @@
 DEPS := deps
 GCC := $(DEPS)/gcc-arm-none-eabi-7-2018-q2-update
 SDK := $(DEPS)/nRF5_SDK_15.1.0_a8c0c4d
+uECC := $(DEPS)/micro-ecc
 
 include Makefile.nrf
 
@@ -8,7 +9,7 @@ OPENOCD := openocd -f interface/cmsis-dap.cfg -c "transport select swd" -f targe
 GCC_BIN := $(GCC)/bin
 
 TARGET := halcyon
-BOARD := BC832
+BOARD := BLE_NANO_2
 
 DEBUG_HEX = build/Debug/$(TARGET).hex
 RELEASE_HEX = build/Release/$(TARGET).hex
@@ -46,7 +47,7 @@ RELEASE_CFLAGS := \
 	-Os \
 
 SUPPORT_HEADER_FILES := $(wildcard *.h) $(wildcard halcyon/*.h)
-SUPPORT_SOURCE_FILES := $(wildcard halcyon/*.c)
+SUPPORT_SOURCE_FILES := $(wildcard halcyon/*.c) $(wildcard keys/*.c)
 
 NRF_OBJ_FILES := $(NRF_SRC_FILES)
 NRF_OBJ_FILES := $(patsubst %.c,%.o,$(NRF_OBJ_FILES))
@@ -65,17 +66,29 @@ endif
 
 __PHONY:
 
-$(NRF_SRC_FILES) : $(DEPS)/stamp
-
-$(DEPS)/stamp:
+deps/warning:
 	@echo "Gotta fetch some dependencies. This'll take about 230MB." >&2
 	@echo "Hit enter to continue, or ^C to bail." >&2
 	@read -p "? "
+	touch deps/warning
+
+$(NRF_SRC_FILES) : $(DEPS)/stamp
+
+$(GCC): | deps/warning
 	mkdir -p $(DEPS)
 	cd $(DEPS) && curl -LOJ https://developer.arm.com/-/media/Files/downloads/gnu-rm/7-2018q2/gcc-arm-none-eabi-7-2018-q2-update-mac.tar.bz2
 	cd $(DEPS) && tar -xjf gcc-arm-none-eabi-7-2018-q2-update-mac.tar.bz2
-	cd $(DEPS) && curl -LOJ https://www.nordicsemi.com/eng/nordic/download_resource/59011/84/72918940/116085
-	cd $(DEPS) && unzip -q -d nRF5_SDK_15.1.0_a8c0c4d nRF5_SDK_15.1.0_a8c0c4d.zip
+
+$(SDK): | deps/warning
+	mkdir -p $(DEPS)
+	cd $(DEPS) && curl -LOJ https://developer.arm.com/-/media/Files/downloads/gnu-rm/7-2018q2/gcc-arm-none-eabi-7-2018-q2-update-mac.tar.bz2
+	cd $(DEPS) && tar -xjf gcc-arm-none-eabi-7-2018-q2-update-mac.tar.bz2
+
+$(uECC): | deps/warning
+	mkdir -p $(DEPS)
+	cd $(DEPS) && git clone https://github.com/kmackay/micro-ecc micro-ecc && cd micro-ecc && git checkout 601bd11062c551b108adbb43ba99f199b840777c
+
+$(DEPS)/stamp: $(GCC) $(SDK) $(uECC)
 	touch $(DEPS)/stamp
 
 nuke: __PHONY
@@ -117,11 +130,15 @@ debug: build/Debug/$(TARGET).out upload __PHONY
 define builddir
 .PRECIOUS: $(1)/$$(SDK)/%.o
 
-$(1)/$$(SDK)/%.o: $$(SDK)/%.c app_config.h Makefile
+$(1)/$$(SDK)/%.o: $$(SDK)/%.c app_config.h Makefile Makefile.nrf
 	@mkdir -p $$(dir $$@)
 	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
 
-$(1)/$$(SDK)/%.o: $$(SDK)/%.S app_config.h Makefile
+$(1)/$$(SDK)/%.o: $$(SDK)/%.S app_config.h Makefile Makefile.nrf
+	@mkdir -p $$(dir $$@)
+	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
+
+$(1)/$$(uECC)/%.o: $$(uECC)/%.c Makefile
 	@mkdir -p $$(dir $$@)
 	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
 

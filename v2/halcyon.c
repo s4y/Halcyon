@@ -4,13 +4,17 @@
 
 #include "app_error.h"
 #include "app_timer.h"
+#include "ble_dfu.h"
 #include "nordic_common.h"
+#include "nrf_dfu_ble_svci_bond_sharing.h"
 #include "nrf_gpio.h"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 #include "nrf_pwr_mgmt.h"
 #include "nrf_sdh.h"
+#include "nrf_svci_async_function.h"
+#include "nrf_svci_async_handler.h"
 
 #include "halcyon_boards.h"
 #include "halcyon/bridge.h"
@@ -20,6 +24,7 @@ int main(void) {
 	NRF_LOG_INIT(NULL);
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 
+    // APP_ERROR_CHECK(ble_dfu_buttonless_async_svci_init());
     APP_ERROR_CHECK(nrf_pwr_mgmt_init());
 	APP_ERROR_CHECK(nrf_sdh_enable_request());
 	APP_ERROR_CHECK(app_timer_init());
