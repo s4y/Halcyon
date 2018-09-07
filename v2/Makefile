@@ -1,7 +1,6 @@
 DEPS := deps
 GCC := $(DEPS)/gcc-arm-none-eabi-7-2018-q2-update
 SDK := $(DEPS)/nRF5_SDK_15.1.0_a8c0c4d
-uECC := $(DEPS)/micro-ecc
 
 include Makefile.nrf
 
@@ -84,11 +83,7 @@ $(SDK): | deps/warning
 	cd $(DEPS) && curl -LOJ https://developer.arm.com/-/media/Files/downloads/gnu-rm/7-2018q2/gcc-arm-none-eabi-7-2018-q2-update-mac.tar.bz2
 	cd $(DEPS) && tar -xjf gcc-arm-none-eabi-7-2018-q2-update-mac.tar.bz2
 
-$(uECC): | deps/warning
-	mkdir -p $(DEPS)
-	cd $(DEPS) && git clone https://github.com/kmackay/micro-ecc micro-ecc && cd micro-ecc && git checkout 601bd11062c551b108adbb43ba99f199b840777c
-
-$(DEPS)/stamp: $(GCC) $(SDK) $(uECC)
+$(DEPS)/stamp: $(GCC) $(SDK)
 	touch $(DEPS)/stamp
 
 nuke: __PHONY
@@ -135,10 +130,6 @@ $(1)/$$(SDK)/%.o: $$(SDK)/%.c app_config.h Makefile Makefile.nrf
 	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
 
 $(1)/$$(SDK)/%.o: $$(SDK)/%.S app_config.h Makefile Makefile.nrf
-	@mkdir -p $$(dir $$@)
-	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
-
-$(1)/$$(uECC)/%.o: $$(uECC)/%.c Makefile
 	@mkdir -p $$(dir $$@)
 	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
 

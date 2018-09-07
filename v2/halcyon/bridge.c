@@ -3,6 +3,7 @@
 #include "app_config.h"
 
 #include "nrf_log.h"
+#include "nrf_uarte.h"
 #include "app_timer.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_gpio.h"
@@ -10,102 +11,115 @@
 #include "bridge.h"
 #include "halcyon_boards.h"
 
-static const nrfx_uarte_t g_uart = NRFX_UARTE_INSTANCE(0);
 static uint8_t rx_buf[8];
-static bool need_sync = true;
 #define RX_BUF_COUNT (sizeof(rx_buf) / sizeof(*rx_buf))
 
 APP_TIMER_DEF(rx_timeout_timer);
 APP_TIMER_DEF(rx_sync_timer);
 
-static void sync() {
-  NRF_LOG_INFO("%s %d", __func__, app_timer_cnt_get())
-  need_sync = true;
-  nrfx_uarte_rx_abort(&g_uart);
+static enum {
+  RX_STATE_WAIT_SYNC,
+  RX_STATE_WAIT_PACKET,
+  RX_STATE_READ_PACKET,
+} rx_state;
+
+static void wait_sync() {
+  NRF_LOG_INFO(__func__);
+  rx_state = RX_STATE_WAIT_SYNC;
+  nrf_uarte_task_trigger(UARTE, NRF_UARTE_TASK_STOPRX);
+  nrf_uarte_task_trigger(UARTE, NRF_UARTE_TASK_STARTRX);
+  nrf_uarte_task_trigger(UARTE, NRF_UARTE_TASK_FLUSHRX);
+  app_timer_stop(rx_timeout_timer);
   app_timer_stop(rx_sync_timer);
   app_timer_start(rx_sync_timer, 300, NULL);
 }
 
-static void bridge_rx() {
-  NRF_LOG_INFO("%s %d", __func__, app_timer_cnt_get())
-  need_sync = false;
-  APP_ERROR_CHECK(nrfx_uarte_rx(&g_uart, rx_buf, 1));
-  APP_ERROR_CHECK(nrfx_uarte_rx(&g_uart, rx_buf + 1, sizeof(rx_buf)));
+static void handle_rx_timeout_timer() {
+  NRF_LOG_INFO(__func__);
+  wait_sync();
 }
 
-static void halcyon_bridge_handle_uarte_event(
-  nrfx_uarte_event_t const *p_event, void *p_context
-) {
-  NRF_LOG_INFO("%s %d", __func__, app_timer_cnt_get())
-  switch (p_event->type) {
-    case NRFX_UARTE_EVT_TX_DONE:
-      {
-        uint8_t* buf = p_event->data.rxtx.p_data;
-#if NRF_LOG_LEVEL >= NRF_LOG_SEVERITY_INFO
-        char buf_str[17];
-        snprintf(
-            buf_str, sizeof(buf_str) / sizeof(*buf_str),
-            "%02x%02x%02x%02x%02x%02x%02x%02x",
-            buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
-        NRF_LOG_INFO("UARTE tx: %s", buf_str);
-#endif
-      } break;
-    case NRFX_UARTE_EVT_RX_DONE:
-      {
-        nrfx_uarte_xfer_evt_t rx = p_event->data.rxtx;
-        if (need_sync || rx.bytes != sizeof(rx_buf)) {
-          sync();
-          break;
-        }
-        if (rx.bytes == 1) {
-          app_timer_start(rx_timeout_timer, APP_TIMER_TICKS(200), NULL);
-          break;
-        }
-        NRFX_ASSERT(rx.p_data == rx_buf + 1);
-        NRFX_ASSERT(rx.bytes == RX_BUF_COUNT - 1);
-        app_timer_stop(rx_timeout_timer);
+static void handle_rx_sync_timer() {
+  NRF_LOG_INFO(__func__);
+  rx_state = RX_STATE_WAIT_PACKET;
+}
 
-        for (size_t i = 0; i < RX_BUF_COUNT; i++)
-          rx_buf[i] = ~rx_buf[i];
+static inline bool check_clear(nrf_uarte_event_t event) {
+  bool was_set = nrf_uarte_event_check(UARTE, event);
+  nrf_uarte_event_clear(UARTE, event);
+  return was_set;
+}
 
-#if NRF_LOG_LEVEL >= NRF_LOG_SEVERITY_INFO
-        char buf_str[17];
-        snprintf(
-            buf_str, sizeof(buf_str) / sizeof(*buf_str),
-            "%02x%02x%02x%02x%02x%02x%02x%02x",
-            rx_buf[0], rx_buf[1], rx_buf[2], rx_buf[3], rx_buf[4], rx_buf[5], rx_buf[6], rx_buf[7]);
-        NRF_LOG_INFO("UARTE rx: %s", buf_str);
-        NRF_LOG_FLUSH();
-#endif
-        bridge_rx();
-      } break;
-    case NRFX_UARTE_EVT_ERROR:
-      {
-        NRF_LOG_ERROR("UARTE error: %"PRIu32, p_event->data.error.error_mask);
-        sync();
-      } break;
+void UARTE0_UART0_IRQHandler() {
+  if (check_clear(NRF_UARTE_EVENT_ERROR)) {
+    uint32_t errorsrc = nrf_uarte_errorsrc_get_and_clear(UARTE);
+    NRF_LOG_INFO("UART RX error: %d", errorsrc);
+    wait_sync();
   }
+  if (check_clear(NRF_UARTE_EVENT_RXSTARTED)) {
+    nrf_uarte_int_enable(UARTE, NRF_UARTE_INT_RXDRDY_MASK);
+    // rx_state = RX_STATE_WAIT_PACKET;
+  }
+  if (check_clear(NRF_UARTE_EVENT_RXDRDY)) {
+    switch (rx_state) {
+      case RX_STATE_WAIT_SYNC:
+        wait_sync();
+        break;
+      case RX_STATE_WAIT_PACKET:
+        app_timer_start(rx_timeout_timer, APP_TIMER_TICKS(200), NULL);
+        nrf_uarte_int_disable(UARTE, NRF_UARTE_INT_RXDRDY_MASK);
+        rx_state = RX_STATE_READ_PACKET;
+        break;
+      case RX_STATE_READ_PACKET:
+        break;
+    }
+  }
+  if (check_clear(NRF_UARTE_EVENT_ENDRX)) {
+    app_timer_stop(rx_timeout_timer);
+    if (rx_state == RX_STATE_READ_PACKET) {
+      rx_state = RX_STATE_WAIT_PACKET;
+      for (size_t i = 0; i < RX_BUF_COUNT; i++)
+        rx_buf[i] = ~rx_buf[i];
+#if NRF_LOG_LEVEL >= NRF_LOG_SEVERITY_INFO
+      char buf_str[17];
+      snprintf(
+          buf_str, sizeof(buf_str) / sizeof(*buf_str),
+          "%02x%02x%02x%02x%02x%02x%02x%02x",
+          rx_buf[0], rx_buf[1], rx_buf[2], rx_buf[3], rx_buf[4], rx_buf[5], rx_buf[6], rx_buf[7]);
+      NRF_LOG_INFO("UARTE rx: %s", buf_str);
+      NRF_LOG_FLUSH();
+#endif
+    }
+  }
+  if (check_clear(NRF_UARTE_EVENT_ENDTX)) {
+  }
+  if (check_clear(NRF_UARTE_EVENT_TXSTARTED)) {
+  }
+  if (check_clear(NRF_UARTE_EVENT_TXSTOPPED)) {
+  }
+  NRF_LOG_FLUSH();
 }
 
-void halcyon_bridge_init(halcyon_bridge_t* bridge) {
+void halcyon_bridge_init() {
   // Set up the UART, which interfaces with the bus.
+
+  app_timer_create(&rx_timeout_timer, APP_TIMER_MODE_SINGLE_SHOT, &handle_rx_timeout_timer);
+  app_timer_create(&rx_sync_timer, APP_TIMER_MODE_SINGLE_SHOT, &handle_rx_sync_timer);
 
   nrf_gpio_cfg_output(TX_PIN);
   nrf_gpio_pin_set(TX_PIN);
   nrf_gpio_cfg_input(RX_PIN, NRF_GPIO_PIN_NOPULL);
 
-  static nrfx_uarte_config_t cfg = NRFX_UARTE_DEFAULT_CONFIG;
-  cfg.pseltxd = TX_PIN;
-  cfg.pselrxd = RX_PIN;
-  cfg.p_context = bridge;
-  cfg.hwfc = NRF_UARTE_HWFC_DISABLED;
-  cfg.parity = NRF_UARTE_PARITY_INCLUDED;
-  // Custom baud rate around 500.
-  cfg.baudrate = 0x21000;
-  APP_ERROR_CHECK(nrfx_uarte_init(&bridge->uarte, &cfg, halcyon_bridge_handle_uarte_event));
+  nrf_uarte_txrx_pins_set(UARTE, TX_PIN, RX_PIN);
+  nrf_uarte_configure(UARTE, NRF_UARTE_PARITY_INCLUDED, NRF_UARTE_HWFC_DISABLED);
+  nrf_uarte_baudrate_set(UARTE, 0x21000); // Roughly 500 baud
+  nrf_uarte_rx_buffer_set(UARTE, rx_buf, sizeof(rx_buf));
+  nrf_uarte_int_enable(UARTE, NRF_UARTE_INT_ENDRX_MASK | NRF_UARTE_INT_ENDTX_MASK | NRF_UARTE_INT_RXSTARTED_MASK);
+  nrf_uarte_shorts_enable(UARTE, NRF_UARTE_SHORT_ENDRX_STARTRX);
+  nrf_uarte_enable(UARTE);
+  NRFX_IRQ_PRIORITY_SET(nrfx_get_irq_number(UARTE),
+      NRFX_UARTE_DEFAULT_CONFIG_IRQ_PRIORITY);
+  NRFX_IRQ_ENABLE(nrfx_get_irq_number(UARTE));
 
-  app_timer_create(&rx_timeout_timer, APP_TIMER_MODE_SINGLE_SHOT, &sync);
-  app_timer_create(&rx_sync_timer, APP_TIMER_MODE_SINGLE_SHOT, &bridge_rx);
-
-  sync();
+  wait_sync();
 }

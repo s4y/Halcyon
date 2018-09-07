@@ -58,17 +58,12 @@ NRF_SRC_FILES += \
   $(SDK)/external/fprintf/nrf_fprintf.c \
   $(SDK)/external/fprintf/nrf_fprintf_format.c \
   $(SDK)/integration/nrfx/legacy/nrf_drv_clock.c \
-  $(SDK)/integration/nrfx/legacy/nrf_drv_uart.c \
   $(SDK)/modules/nrfx/drivers/src/nrfx_clock.c \
   $(SDK)/modules/nrfx/drivers/src/nrfx_gpiote.c \
   $(SDK)/modules/nrfx/drivers/src/nrfx_power_clock.c \
   $(SDK)/modules/nrfx/drivers/src/nrfx_ppi.c \
-  $(SDK)/modules/nrfx/drivers/src/nrfx_uart.c \
-  $(SDK)/modules/nrfx/drivers/src/nrfx_uarte.c \
-  $(SDK)/modules/nrfx/drivers/src/prs/nrfx_prs.c \
   $(SDK)/modules/nrfx/mdk/gcc_startup_nrf52.S \
   $(SDK)/modules/nrfx/mdk/system_nrf52.c \
-  $(uECC)/uECC.c \
 
 NRF_DEBUG_SRC_FILES += \
   $(SDK)/components/libraries/log/src/nrf_log_backend_rtt.c \
@@ -164,7 +159,6 @@ NRF_INC_FOLDERS += \
   $(SDK)/components/libraries/timer \
   $(SDK)/components/libraries/twi_mngr \
   $(SDK)/components/libraries/twi_sensor \
-  $(SDK)/components/libraries/uart \
   $(SDK)/components/libraries/usbd \
   $(SDK)/components/libraries/usbd/class/audio \
   $(SDK)/components/libraries/usbd/class/cdc \
@@ -217,4 +211,3 @@ NRF_INC_FOLDERS += \
   $(SDK)/modules/nrfx/drivers/include \
   $(SDK)/modules/nrfx/hal \
   $(SDK)/modules/nrfx/mdk \
-  $(uECC) \

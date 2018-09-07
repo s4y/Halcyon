@@ -1,4 +1,5 @@
 #define DEVICE_NAME "Halcyon Bridge"
+#define UARTE NRF_UARTE0
 
 #if defined(BOARD_BLE_NANO_2)
 

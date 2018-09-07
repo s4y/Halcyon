@@ -29,8 +29,7 @@ int main(void) {
   APP_ERROR_CHECK(nrf_sdh_enable_request());
   APP_ERROR_CHECK(app_timer_init());
 
-  halcyon_bridge_t bridge = {NRFX_UARTE_INSTANCE(0)};
-  halcyon_bridge_init(&bridge);
+  halcyon_bridge_init();
   invert_init();
 
   halcyon_ble_characteristic_t characteristics[] = {

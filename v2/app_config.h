@@ -6,9 +6,6 @@
 
 #define APP_FIFO_ENABLED 1
 
-#define APP_UART_DRIVER_INSTANCE 0
-#define APP_UART_ENABLED 1
-
 #define BUTTON_ENABLED 0
 
 #define CLOCK_ENABLED 1
