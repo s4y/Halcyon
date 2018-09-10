@@ -34,8 +34,43 @@
 NRF_BLE_GATT_DEF(m_gatt);
 BLE_ADVERTISING_DEF(m_advertising);
 
+typedef struct {
+  bool in_use;
+  uint16_t conn_handle;
+} halcyon_peer_t;
+
+static halcyon_peer_t halcyon_peers[NRF_SDH_BLE_PERIPHERAL_LINK_COUNT] = {{0}};
+
+halcyon_peer_t *peer_get(uint16_t conn_handle, bool create) {
+  NRF_LOG_INFO("Peers:");
+  for (halcyon_peer_t *peer = halcyon_peers, *end = halcyon_peers + NRF_SDH_BLE_PERIPHERAL_LINK_COUNT; peer < end; peer++)
+    NRF_LOG_INFO("- %d", peer->conn_handle);
+  for (halcyon_peer_t *peer = halcyon_peers, *end = halcyon_peers + NRF_SDH_BLE_PERIPHERAL_LINK_COUNT; peer < end; peer++) {
+    if (peer->in_use && peer->conn_handle == conn_handle) {
+      return peer;
+    } else if (create && !peer->in_use) {
+      peer->in_use = true;
+      *peer = (halcyon_peer_t){true, conn_handle};
+      return peer;
+    }
+  }
+  return NULL;
+}
+
+halcyon_ble_config_t* g_config;
+
 static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
   switch (p_ble_evt->header.evt_id) {
+    case BLE_GAP_EVT_CONNECTED:
+      peer_get(p_ble_evt->evt.gap_evt.conn_handle, true);
+      break;
+    case BLE_GAP_EVT_DISCONNECTED:
+      {
+        halcyon_peer_t* peer = peer_get(p_ble_evt->evt.gap_evt.conn_handle, false);
+        if (peer)
+          peer->in_use = false;
+      }
+      break;
     case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
       APP_ERROR_CHECK(sd_ble_gap_phy_update(
         p_ble_evt->evt.gap_evt.conn_handle,
@@ -157,4 +192,24 @@ void halcyon_ble_init(halcyon_ble_config_t* config) {
   }
 
   APP_ERROR_CHECK(ble_advertising_start(&m_advertising, BLE_ADV_MODE_SLOW));
+}
+
+void halcyon_ble_set(halcyon_ble_characteristic_t* characteristic, uint8_t* value, size_t len) {
+  uint16_t hvx_len = len;
+  ble_gatts_hvx_params_t hvx_params = {
+    .handle = characteristic->_handles.value_handle,
+    .type   = BLE_GATT_HVX_NOTIFICATION,
+    .offset = 0,
+    .p_len  = &hvx_len,
+    .p_data = value,
+  };
+  for (halcyon_peer_t *peer = halcyon_peers, *end = halcyon_peers + NRF_SDH_BLE_PERIPHERAL_LINK_COUNT; peer < end; peer++) {
+    if (!peer->in_use)
+      return;
+    int err = sd_ble_gatts_hvx(peer->conn_handle, &hvx_params);
+    if (
+        err != NRF_ERROR_INVALID_STATE &&
+        err != BLE_ERROR_GATTS_SYS_ATTR_MISSING
+       ) APP_ERROR_CHECK(err);
+  }
 }

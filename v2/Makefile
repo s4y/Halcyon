@@ -13,16 +13,13 @@ BOARD := BLE_NANO_2
 DEBUG_HEX = build/Debug/$(TARGET).hex
 RELEASE_HEX = build/Release/$(TARGET).hex
 
+LOCAL_CC := $(CC)
 CC := $(GCC_BIN)/arm-none-eabi-gcc
 AR := $(GCC_BIN)/arm-none-eabi-ar
 CFLAGS := \
 	-Wall \
 	-Werror \
 	-Wno-expansion-to-defined \
-	-mthumb \
-	-mcpu=cortex-m4 \
-	-mfloat-abi=hard \
-	-mfpu=fpv4-sp-d16 \
 	-DNRF52 \
 	-DS132 \
 	-DNRF52832_XXAA \
@@ -31,22 +28,43 @@ CFLAGS := \
 	-DNRF_SD_BLE_API_VERSION=6 \
 	-DUSE_APP_CONFIG \
 	-DBOARD_$(BOARD) \
-	-I. $(addprefix -isystem,$(NRF_INC_FOLDERS)) \
+	-I. \
+	$(addprefix -isystem,$(NRF_INC_FOLDERS)) \
 	-L$(SDK)/modules/nrfx/mdk \
 
-DEBUG_CFLAGS := \
+TARGET_CFLAGS := $(CFLAGS) \
+	-mthumb \
+	-mcpu=cortex-m4 \
+	-mfloat-abi=hard \
+	-mfpu=fpv4-sp-d16 \
+
+TEST_CFLAGS := $(CFLAGS) \
+	-include test/pch.h \
+	-I test/mock \
+	-DDEBUG \
+	-g \
+
+DEBUG_CFLAGS := $(TARGET_CFLAGS) \
 	--specs=rdimon.specs \
 	-DDEBUG \
 	-g \
 	-lc \
 	-lrdimon \
 
-RELEASE_CFLAGS := \
+RELEASE_CFLAGS := $(TARGET_CFLAGS) \
 	--specs=nosys.specs \
 	-Os \
 
+TEST_HEADER_FILES := $(wildcard test/*.h)
+TEST_SOURCE_FILES := $(wildcard halcyon/*_test.c)
+TEST_SOURCE_FILES := $(patsubst %_test.c,%.c,$(TEST_SOURCE_FILES)) $(TEST_SOURCE_FILES)
+TEST_SOURCE_FILES := $(wildcard test/*.c) $(TEST_SOURCE_FILES)
+TEST_SOURCE_FILES := $(wildcard test/mock/*.c) $(TEST_SOURCE_FILES)
+TEST_SOURCE_FILES := $(wildcard halcyon/*_test.c) $(TEST_SOURCE_FILES)
+
 SUPPORT_HEADER_FILES := $(wildcard *.h) $(wildcard halcyon/*.h)
-SUPPORT_SOURCE_FILES := $(wildcard halcyon/*.c) $(wildcard keys/*.c)
+SUPPORT_SOURCE_FILES := $(wildcard halcyon/*.c)
+SUPPORT_SOURCE_FILES := $(filter-out %_test.c,$(SUPPORT_SOURCE_FILES))
 
 NRF_OBJ_FILES := $(NRF_SRC_FILES)
 NRF_OBJ_FILES := $(patsubst %.c,%.o,$(NRF_OBJ_FILES))
@@ -119,6 +137,9 @@ debugclient: build/Debug/$(TARGET).out __PHONY
 debug: build/Debug/$(TARGET).out upload __PHONY
 	$(GCC_BIN)/arm-none-eabi-gdb "$<" -ex 'target remote | $(OPENOCD) -c "gdb_port pipe; init; arm semihosting enable; reset halt"'
 
+test: build/Debug/$(TARGET)_tests __PHONY
+	"$<"
+
 %.hex: %.out
 	$(GCC_BIN)/arm-none-eabi-objcopy -O ihex "$<" "$@"
 
@@ -127,16 +148,19 @@ define builddir
 
 $(1)/$$(SDK)/%.o: $$(SDK)/%.c app_config.h Makefile Makefile.nrf
 	@mkdir -p $$(dir $$@)
-	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
+	$$(CC) -c -o "$$@" $(2) $$(TARGET_CFLAGS) "$$<"
 
 $(1)/$$(SDK)/%.o: $$(SDK)/%.S app_config.h Makefile Makefile.nrf
 	@mkdir -p $$(dir $$@)
-	$$(CC) -c -o "$$@" $(2) $$(CFLAGS) "$$<"
+	$$(CC) -c -o "$$@" $(2) $$(TARGET_CFLAGS) "$$<"
 
 $(1)/%.out: %.ld %.c $$(SUPPORT_HEADER_FILES) $$(SUPPORT_SOURCE_FILES) $$(addprefix $(1)/,$(3))
-
 	@mkdir -p $$(dir $$@)
-	$$(CC) -o "$$@" $(2) $$(CFLAGS) -Wpedantic -L$(1) -Wl,-T,$$(filter-out %.h,$$^)
+	$$(CC) -o "$$@" $(2) -Wpedantic -L$(1) -Wl,-T,$$(filter-out %.h,$$^)
+
+$(1)/%_tests: %_tests.c $$(TEST_HEADER_FILES) $$(TEST_SOURCE_FILES) $$(SUPPORT_HEADER_FILES)
+	@mkdir -p $$(dir $$@)
+	$$(LOCAL_CC) -o "$$@" $(TEST_CFLAGS) -Wpedantic -L$(1) $$(filter-out %.h,$$^)
 endef
 
 $(eval $(call builddir,build/Debug,$(DEBUG_CFLAGS),$(NRF_DEBUG_OBJ_FILES)))
@@ -146,6 +170,5 @@ $(eval $(call builddir,build/Release,$(RELEASE_CFLAGS),$(NRF_OBJ_FILES)))
 	@echo \
 		--sysroot=$(GCC)/arm-none-eabi \
 		--target=armv7m-none-eabi \
-		$(CFLAGS) \
 		$(DEBUG_CFLAGS) \
 		-x c

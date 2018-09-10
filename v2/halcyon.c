@@ -20,6 +20,82 @@
 #include "halcyon/bridge.h"
 #include "halcyon/invert.h"
 
+static halcyon_ble_characteristic_t characteristics[] = {
+  {
+    .params = {
+      .uuid = 0xB00F,
+      .uuid_type = BLE_UUID_TYPE_BLE,
+      .max_len = 8,
+      .init_len = 8,
+      .p_init_value = (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+      .char_props = { .read = 1, .notify = 1 },
+      .read_access = SEC_OPEN,
+      .cccd_write_access = SEC_OPEN,
+    },
+  },
+  {
+    .params = {
+      .uuid = 0xAC00,
+      .uuid_type = BLE_UUID_TYPE_BLE,
+      .max_len = 7,
+      .init_len = 7,
+      .p_init_value = (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+      .char_props = { .read = 1, .notify = 1 },
+      .read_access = SEC_OPEN,
+      .cccd_write_access = SEC_OPEN,
+    },
+  },
+  {
+    .params = {
+      .uuid = 0xAC20,
+      .uuid_type = BLE_UUID_TYPE_BLE,
+      .max_len = 7,
+      .init_len = 7,
+      .p_init_value = (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+      .char_props = { .read = 1, .notify = 1 },
+      .read_access = SEC_OPEN,
+      .cccd_write_access = SEC_OPEN,
+    },
+  },
+  {
+    .params = {
+      .uuid = 0xAC21,
+      .uuid_type = BLE_UUID_TYPE_BLE,
+      .max_len = 7,
+      .init_len = 7,
+      .p_init_value = (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+      .char_props = { .read = 1, .notify = 1 },
+      .read_access = SEC_OPEN,
+      .cccd_write_access = SEC_OPEN,
+    },
+  },
+  {
+    .params = {
+      .uuid = 0xACED,
+      .uuid_type = BLE_UUID_TYPE_BLE,
+      .max_len = 2,
+      .init_len = 2,
+      .p_init_value = (uint8_t[]){0x00, 0x00},
+      .char_props = { .read = 1, .notify = 1, .write = 1 },
+      .read_access = SEC_OPEN,
+      .write_access = SEC_JUST_WORKS,
+      .cccd_write_access = SEC_OPEN,
+    },
+  },
+};
+
+static halcyon_ble_service_t services[] = {
+  {
+    .uuid = {0xACAC, BLE_UUID_TYPE_BLE},
+    .characteristics = characteristics,
+    .n_characteristics = sizeof(characteristics) / sizeof(*characteristics),
+  },
+};
+
+void halcyon_bridge_rx(uint8_t* buf, size_t len) {
+  halcyon_ble_set(&characteristics[0], buf, len);
+}
+
 int main(void) {
   NRF_LOG_INIT(NULL);
     NRF_LOG_DEFAULT_BACKENDS_INIT();
@@ -31,78 +107,6 @@ int main(void) {
 
   halcyon_bridge_init();
   invert_init();
-
-  halcyon_ble_characteristic_t characteristics[] = {
-    {
-      .params = {
-        .uuid = 0xB00F,
-        .uuid_type = BLE_UUID_TYPE_BLE,
-        .max_len = 8,
-        .init_len = 8,
-        .p_init_value = (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-        .char_props = { .read = 1, .notify = 1 },
-        .read_access = SEC_OPEN,
-        .cccd_write_access = SEC_OPEN,
-      },
-    },
-    {
-      .params = {
-        .uuid = 0xAC00,
-        .uuid_type = BLE_UUID_TYPE_BLE,
-        .max_len = 7,
-        .init_len = 7,
-        .p_init_value = (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-        .char_props = { .read = 1, .notify = 1 },
-        .read_access = SEC_OPEN,
-        .cccd_write_access = SEC_OPEN,
-      },
-    },
-    {
-      .params = {
-        .uuid = 0xAC20,
-        .uuid_type = BLE_UUID_TYPE_BLE,
-        .max_len = 7,
-        .init_len = 7,
-        .p_init_value = (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-        .char_props = { .read = 1, .notify = 1 },
-        .read_access = SEC_OPEN,
-        .cccd_write_access = SEC_OPEN,
-      },
-    },
-    {
-      .params = {
-        .uuid = 0xAC21,
-        .uuid_type = BLE_UUID_TYPE_BLE,
-        .max_len = 7,
-        .init_len = 7,
-        .p_init_value = (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-        .char_props = { .read = 1, .notify = 1 },
-        .read_access = SEC_OPEN,
-        .cccd_write_access = SEC_OPEN,
-      },
-    },
-    {
-      .params = {
-        .uuid = 0xACED,
-        .uuid_type = BLE_UUID_TYPE_BLE,
-        .max_len = 2,
-        .init_len = 2,
-        .p_init_value = (uint8_t[]){0x00, 0x00},
-        .char_props = { .read = 1, .notify = 1, .write = 1 },
-        .read_access = SEC_OPEN,
-        .write_access = SEC_JUST_WORKS,
-        .cccd_write_access = SEC_OPEN,
-      },
-    },
-  };
-
-  halcyon_ble_service_t services[] = {
-    {
-      .uuid = {0xACAC, BLE_UUID_TYPE_BLE},
-      .characteristics = characteristics,
-      .n_characteristics = sizeof(characteristics) / sizeof(*characteristics),
-    },
-  };
 
   halcyon_ble_config_t ble = {
     .services = services,

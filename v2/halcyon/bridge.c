@@ -1,4 +1,7 @@
 #include <inttypes.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "app_config.h"
 
@@ -24,7 +27,6 @@ static enum {
 } rx_state;
 
 static void wait_sync() {
-  NRF_LOG_INFO(__func__);
   rx_state = RX_STATE_WAIT_SYNC;
   nrf_uarte_task_trigger(UARTE, NRF_UARTE_TASK_STOPRX);
   nrf_uarte_task_trigger(UARTE, NRF_UARTE_TASK_STARTRX);
@@ -35,12 +37,10 @@ static void wait_sync() {
 }
 
 static void handle_rx_timeout_timer() {
-  NRF_LOG_INFO(__func__);
   wait_sync();
 }
 
 static void handle_rx_sync_timer() {
-  NRF_LOG_INFO(__func__);
   rx_state = RX_STATE_WAIT_PACKET;
 }
 
@@ -58,7 +58,6 @@ void UARTE0_UART0_IRQHandler() {
   }
   if (check_clear(NRF_UARTE_EVENT_RXSTARTED)) {
     nrf_uarte_int_enable(UARTE, NRF_UARTE_INT_RXDRDY_MASK);
-    // rx_state = RX_STATE_WAIT_PACKET;
   }
   if (check_clear(NRF_UARTE_EVENT_RXDRDY)) {
     switch (rx_state) {
@@ -89,6 +88,7 @@ void UARTE0_UART0_IRQHandler() {
       NRF_LOG_INFO("UARTE rx: %s", buf_str);
       NRF_LOG_FLUSH();
 #endif
+      halcyon_bridge_rx(rx_buf, sizeof(rx_buf));
     }
   }
   if (check_clear(NRF_UARTE_EVENT_ENDTX)) {
@@ -117,6 +117,7 @@ void halcyon_bridge_init() {
   nrf_uarte_int_enable(UARTE, NRF_UARTE_INT_ENDRX_MASK | NRF_UARTE_INT_ENDTX_MASK | NRF_UARTE_INT_RXSTARTED_MASK);
   nrf_uarte_shorts_enable(UARTE, NRF_UARTE_SHORT_ENDRX_STARTRX);
   nrf_uarte_enable(UARTE);
+
   NRFX_IRQ_PRIORITY_SET(nrfx_get_irq_number(UARTE),
       NRFX_UARTE_DEFAULT_CONFIG_IRQ_PRIORITY);
   NRFX_IRQ_ENABLE(nrfx_get_irq_number(UARTE));
