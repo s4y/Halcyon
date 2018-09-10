@@ -23,4 +23,4 @@ typedef struct {
 } halcyon_ble_config_t;
 
 void halcyon_ble_init(halcyon_ble_config_t* config);
-void halcyon_ble_set(halcyon_ble_characteristic_t* characteristic, uint8_t* value, size_t len);
+void halcyon_ble_notify_changed(halcyon_ble_characteristic_t* characteristic);

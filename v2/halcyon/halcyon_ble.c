@@ -194,14 +194,13 @@ void halcyon_ble_init(halcyon_ble_config_t* config) {
   APP_ERROR_CHECK(ble_advertising_start(&m_advertising, BLE_ADV_MODE_SLOW));
 }
 
-void halcyon_ble_set(halcyon_ble_characteristic_t* characteristic, uint8_t* value, size_t len) {
-  uint16_t hvx_len = len;
+void halcyon_ble_notify_changed(halcyon_ble_characteristic_t* characteristic) {
   ble_gatts_hvx_params_t hvx_params = {
     .handle = characteristic->_handles.value_handle,
     .type   = BLE_GATT_HVX_NOTIFICATION,
     .offset = 0,
-    .p_len  = &hvx_len,
-    .p_data = value,
+    .p_len  = &characteristic->params.init_len,
+    .p_data = characteristic->params.p_init_value,
   };
   for (halcyon_peer_t *peer = halcyon_peers, *end = halcyon_peers + NRF_SDH_BLE_PERIPHERAL_LINK_COUNT; peer < end; peer++) {
     if (!peer->in_use)

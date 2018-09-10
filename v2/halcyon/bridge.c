@@ -14,17 +14,39 @@
 #include "bridge.h"
 #include "halcyon_boards.h"
 
-static uint8_t rx_buf[8];
-#define RX_BUF_COUNT (sizeof(rx_buf) / sizeof(*rx_buf))
+// inline halcyon_bus_node_state_t node_state_parse(uint8_t* buf) {
+//   return (halcyon_bus_node_state_t) {
+//     .byte0 = buf[0],
+//     .byte1 = buf[1],
+//     .byte2 = buf[2],
+//     .byte3 = buf[3],
+//     .byte4 = buf[4],
+//     .byte5 = buf[5],
+//     .byte6 = buf[6],
+//     .byte7 = buf[7],
+//   };
+// }
 
-APP_TIMER_DEF(rx_timeout_timer);
-APP_TIMER_DEF(rx_sync_timer);
+// inline bool node_state_equals(halcyon_bus_node_state_t a, halcyon_bus_node_state_t b) {
+//   return memcmp(a.buf, b.buf, sizeof(a.buf)) == 0;
+// }
+
+halcyon_bus_node_state_t halcyon_bus_node[MAX_HALCYON_BUS_NODE];
+
+halcyon_bus_node_state_t blower_node_state;
+halcyon_bus_node_state_t first_thermostat_node_state;
+halcyon_bus_node_state_t second_thirmostat_node_state;
 
 static enum {
   RX_STATE_WAIT_SYNC,
   RX_STATE_WAIT_PACKET,
   RX_STATE_READ_PACKET,
 } rx_state;
+
+uint8_t rx_buf[HALCYON_BRIDGE_PACKET_LENGTH];
+
+APP_TIMER_DEF(rx_timeout_timer);
+APP_TIMER_DEF(rx_sync_timer);
 
 static void wait_sync() {
   rx_state = RX_STATE_WAIT_SYNC;
@@ -77,18 +99,44 @@ void UARTE0_UART0_IRQHandler() {
     app_timer_stop(rx_timeout_timer);
     if (rx_state == RX_STATE_READ_PACKET) {
       rx_state = RX_STATE_WAIT_PACKET;
-      for (size_t i = 0; i < RX_BUF_COUNT; i++)
+      for (size_t i = 0; i < HALCYON_BRIDGE_PACKET_LENGTH; i++)
         rx_buf[i] = ~rx_buf[i];
-#if NRF_LOG_LEVEL >= NRF_LOG_SEVERITY_INFO
-      char buf_str[17];
+#if NRF_LOG_LEVEL >= NRF_LOG_SEVERITY_ERROR
+      char buf_str[HALCYON_BRIDGE_PACKET_LENGTH * 2 + 1];
       snprintf(
           buf_str, sizeof(buf_str) / sizeof(*buf_str),
           "%02x%02x%02x%02x%02x%02x%02x%02x",
           rx_buf[0], rx_buf[1], rx_buf[2], rx_buf[3], rx_buf[4], rx_buf[5], rx_buf[6], rx_buf[7]);
       NRF_LOG_INFO("UARTE rx: %s", buf_str);
-      NRF_LOG_FLUSH();
 #endif
-      halcyon_bridge_rx(rx_buf, sizeof(rx_buf));
+      halcyon_bridge_rx_cb();
+
+      halcyon_bus_node_t node_id;
+      halcyon_bus_node_state_t* node_state = NULL;
+      switch (rx_buf[0]) {
+        case 0x00:
+          node_id = 0;
+          node_state = &halcyon_bus_node[node_id];
+          break;
+        case 0x20:
+          node_id = 1;
+          node_state = &halcyon_bus_node[node_id];
+          break;
+        case 0x21:
+          node_id = 1;
+          node_state = &halcyon_bus_node[node_id];
+          break;
+      }
+      if (node_state) {
+        if (memcmp(node_state->buf, rx_buf + 1, sizeof(node_state->buf)) != 0) {
+          memcpy(node_state->buf, rx_buf + 1, sizeof(node_state->buf));
+          halcyon_bridge_state_change_cb(node_id);
+        }
+      } else {
+        NRF_LOG_ERROR("Got a packet for an unknown node: %s", buf_str);
+      }
+      // buf_str will no longer exist after this line, so flush any logs that need it.
+      NRF_LOG_FLUSH();
     }
   }
   if (check_clear(NRF_UARTE_EVENT_ENDTX)) {

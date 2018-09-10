@@ -31,6 +31,7 @@ static halcyon_ble_characteristic_t characteristics[] = {
       .char_props = { .read = 1, .notify = 1 },
       .read_access = SEC_OPEN,
       .cccd_write_access = SEC_OPEN,
+      .is_value_user = true,
     },
   },
   {
@@ -39,10 +40,11 @@ static halcyon_ble_characteristic_t characteristics[] = {
       .uuid_type = BLE_UUID_TYPE_BLE,
       .max_len = 7,
       .init_len = 7,
-      .p_init_value = (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+      .p_init_value = halcyon_bus_node[0].buf,
       .char_props = { .read = 1, .notify = 1 },
       .read_access = SEC_OPEN,
       .cccd_write_access = SEC_OPEN,
+      .is_value_user = true,
     },
   },
   {
@@ -51,10 +53,11 @@ static halcyon_ble_characteristic_t characteristics[] = {
       .uuid_type = BLE_UUID_TYPE_BLE,
       .max_len = 7,
       .init_len = 7,
-      .p_init_value = (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+      .p_init_value = halcyon_bus_node[1].buf,
       .char_props = { .read = 1, .notify = 1 },
       .read_access = SEC_OPEN,
       .cccd_write_access = SEC_OPEN,
+      .is_value_user = true,
     },
   },
   {
@@ -63,10 +66,11 @@ static halcyon_ble_characteristic_t characteristics[] = {
       .uuid_type = BLE_UUID_TYPE_BLE,
       .max_len = 7,
       .init_len = 7,
-      .p_init_value = (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+      .p_init_value = halcyon_bus_node[2].buf,
       .char_props = { .read = 1, .notify = 1 },
       .read_access = SEC_OPEN,
       .cccd_write_access = SEC_OPEN,
+      .is_value_user = true,
     },
   },
   {
@@ -80,6 +84,7 @@ static halcyon_ble_characteristic_t characteristics[] = {
       .read_access = SEC_OPEN,
       .write_access = SEC_JUST_WORKS,
       .cccd_write_access = SEC_OPEN,
+      .is_value_user = true,
     },
   },
 };
@@ -92,18 +97,36 @@ static halcyon_ble_service_t services[] = {
   },
 };
 
-void halcyon_bridge_rx(uint8_t* buf, size_t len) {
-  halcyon_ble_set(&characteristics[0], buf, len);
+void halcyon_bridge_rx_cb() {
+  halcyon_ble_notify_changed(&characteristics[0]);
 }
+
+void halcyon_bridge_state_change_cb(halcyon_bus_node_t id) {
+  halcyon_ble_characteristic_t* characteristic = NULL;
+  switch (id) {
+    case HALCYON_BUS_NODE_BLOWER:
+      characteristic = &characteristics[1];
+      break;
+    case HALCYON_BUS_NODE_THERMOSTAT_ZERO:
+      characteristic = &characteristics[2];
+      break;
+    case HALCYON_BUS_NODE_THERMOSTAT_ONE:
+      characteristic = &characteristics[3];
+      break;
+    case MAX_HALCYON_BUS_NODE:
+      break;
+  }
+  halcyon_ble_notify_changed(characteristic);
+}
+
 
 int main(void) {
   NRF_LOG_INIT(NULL);
-    NRF_LOG_DEFAULT_BACKENDS_INIT();
+  NRF_LOG_DEFAULT_BACKENDS_INIT();
 
-    // APP_ERROR_CHECK(ble_dfu_buttonless_async_svci_init());
-    APP_ERROR_CHECK(nrf_pwr_mgmt_init());
-  APP_ERROR_CHECK(nrf_sdh_enable_request());
+  APP_ERROR_CHECK(nrf_pwr_mgmt_init());
   APP_ERROR_CHECK(app_timer_init());
+  APP_ERROR_CHECK(nrf_sdh_enable_request());
 
   halcyon_bridge_init();
   invert_init();
