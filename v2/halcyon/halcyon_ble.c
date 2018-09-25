@@ -59,6 +59,17 @@ halcyon_peer_t *peer_get(uint16_t conn_handle, bool create) {
 
 halcyon_ble_config_t* g_config;
 
+static halcyon_ble_characteristic_t* characteristic_get_by_handle(uint16_t value_handle) {
+  for (halcyon_ble_service_t *service = g_config->services, *end = service + g_config->n_services; service < end; service++) {
+    for (halcyon_ble_characteristic_t *characteristic = service->characteristics, *end = characteristic + service->n_characteristics; characteristic < end; characteristic++) {
+      if (characteristic->_handles.value_handle == value_handle) {
+        return characteristic;
+      }
+    }
+  }
+  return NULL;
+}
+
 static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
   switch (p_ble_evt->header.evt_id) {
     case BLE_GAP_EVT_CONNECTED:
@@ -82,6 +93,13 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context) {
       break;
     case BLE_GAP_EVT_CONN_PARAM_UPDATE_REQUEST:
       APP_ERROR_CHECK(sd_ble_gap_conn_param_update(p_ble_evt->evt.gap_evt.conn_handle, &p_ble_evt->evt.gap_evt.params.conn_param_update_request.conn_params));
+      break;
+    case BLE_GATTS_EVT_WRITE:
+      {
+        halcyon_ble_characteristic_t* characteristic = characteristic_get_by_handle(p_ble_evt->evt.gatts_evt.params.write.handle);
+        if (characteristic)
+          halcyon_ble_characteristic_written_cb(characteristic);
+      }
       break;
     case BLE_GATTS_EVT_SYS_ATTR_MISSING:
       APP_ERROR_CHECK(sd_ble_gatts_sys_attr_set(p_ble_evt->evt.gap_evt.conn_handle, NULL, 0, 0));
@@ -192,6 +210,8 @@ void halcyon_ble_init(halcyon_ble_config_t* config) {
   }
 
   APP_ERROR_CHECK(ble_advertising_start(&m_advertising, BLE_ADV_MODE_SLOW));
+
+  g_config = config;
 }
 
 void halcyon_ble_notify_changed(halcyon_ble_characteristic_t* characteristic) {

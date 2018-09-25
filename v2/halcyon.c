@@ -27,7 +27,7 @@ static halcyon_ble_characteristic_t characteristics[] = {
       .uuid_type = BLE_UUID_TYPE_BLE,
       .max_len = 8,
       .init_len = 8,
-      .p_init_value = (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+      .p_init_value = halcyon_bridge_last_rx_buf,
       .char_props = { .read = 1, .notify = 1 },
       .read_access = SEC_OPEN,
       .cccd_write_access = SEC_OPEN,
@@ -38,9 +38,9 @@ static halcyon_ble_characteristic_t characteristics[] = {
     .params = {
       .uuid = 0xAC00,
       .uuid_type = BLE_UUID_TYPE_BLE,
-      .max_len = 7,
-      .init_len = 7,
-      .p_init_value = halcyon_bus_node[0].buf,
+      .max_len = 8,
+      .init_len = 8,
+      .p_init_value = (uint8_t*)&halcyon_bus.blower,
       .char_props = { .read = 1, .notify = 1 },
       .read_access = SEC_OPEN,
       .cccd_write_access = SEC_OPEN,
@@ -51,9 +51,9 @@ static halcyon_ble_characteristic_t characteristics[] = {
     .params = {
       .uuid = 0xAC20,
       .uuid_type = BLE_UUID_TYPE_BLE,
-      .max_len = 7,
-      .init_len = 7,
-      .p_init_value = halcyon_bus_node[1].buf,
+      .max_len = 8,
+      .init_len = 8,
+      .p_init_value = (uint8_t*)&halcyon_bus.remote0,
       .char_props = { .read = 1, .notify = 1 },
       .read_access = SEC_OPEN,
       .cccd_write_access = SEC_OPEN,
@@ -64,9 +64,9 @@ static halcyon_ble_characteristic_t characteristics[] = {
     .params = {
       .uuid = 0xAC21,
       .uuid_type = BLE_UUID_TYPE_BLE,
-      .max_len = 7,
-      .init_len = 7,
-      .p_init_value = halcyon_bus_node[2].buf,
+      .max_len = 8,
+      .init_len = 8,
+      .p_init_value = (uint8_t*)&halcyon_bus.remote1,
       .char_props = { .read = 1, .notify = 1 },
       .read_access = SEC_OPEN,
       .cccd_write_access = SEC_OPEN,
@@ -79,7 +79,7 @@ static halcyon_ble_characteristic_t characteristics[] = {
       .uuid_type = BLE_UUID_TYPE_BLE,
       .max_len = 2,
       .init_len = 2,
-      .p_init_value = (uint8_t[]){0x00, 0x00},
+      .p_init_value = halcyon_bridge_state_buf + 1,
       .char_props = { .read = 1, .notify = 1, .write = 1 },
       .read_access = SEC_OPEN,
       .write_access = SEC_JUST_WORKS,
@@ -101,24 +101,30 @@ void halcyon_bridge_rx_cb() {
   halcyon_ble_notify_changed(&characteristics[0]);
 }
 
-void halcyon_bridge_state_change_cb(halcyon_bus_node_t id) {
-  halcyon_ble_characteristic_t* characteristic = NULL;
-  switch (id) {
-    case HALCYON_BUS_NODE_BLOWER:
-      characteristic = &characteristics[1];
+void halcyon_bridge_node_change_cb(halcyon_node_state_t* node) {
+  switch (node->address) {
+    case 0x00:
+      halcyon_ble_notify_changed(&characteristics[1]);
       break;
-    case HALCYON_BUS_NODE_THERMOSTAT_ZERO:
-      characteristic = &characteristics[2];
+    case 0x20:
+      halcyon_ble_notify_changed(&characteristics[2]);
       break;
-    case HALCYON_BUS_NODE_THERMOSTAT_ONE:
-      characteristic = &characteristics[3];
-      break;
-    case MAX_HALCYON_BUS_NODE:
+    case 0x21:
+      halcyon_ble_notify_changed(&characteristics[3]);
       break;
   }
-  halcyon_ble_notify_changed(characteristic);
 }
 
+void halcyon_bridge_state_change_cb() {
+  halcyon_ble_notify_changed(&characteristics[4]);
+}
+
+void halcyon_ble_characteristic_written_cb(halcyon_ble_characteristic_t* characteristic) {
+  if (characteristic == &characteristics[4]) {
+    halcyon_bridge_state_buf[0] |= 0x08;
+    halcyon_ble_notify_changed(characteristic);
+  }
+}
 
 int main(void) {
   NRF_LOG_INIT(NULL);
@@ -131,11 +137,25 @@ int main(void) {
   halcyon_bridge_init();
   invert_init();
 
+#ifdef PAIR_PIN
+  nrf_gpio_cfg_input(PAIR_PIN, NRF_GPIO_PIN_PULLUP);
+#define SHOULD_PAIR !nrf_gpio_pin_read(PAIR_PIN)
+#else
+#define SHOULD_PAIR false
+#endif
+
+#ifdef CLEAR_PIN
+  nrf_gpio_cfg_input(CLEAR_PIN, NRF_GPIO_PIN_PULLUP);
+#define SHOULD_CLEAR !nrf_gpio_pin_read(CLEAR_PIN)
+#else
+#define SHOULD_CLEAR false
+#endif
+
   halcyon_ble_config_t ble = {
     .services = services,
     .n_services = sizeof(services) / sizeof(*services),
-    .allow_bonding = false, // TODO: button
-    .delete_bonds = false, // TODO: button
+    .allow_bonding = SHOULD_PAIR,
+    .delete_bonds = SHOULD_CLEAR,
   };
 
   halcyon_ble_init(&ble);
