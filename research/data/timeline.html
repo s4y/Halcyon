@@ -54,7 +54,7 @@ function show(data) {
 }
 
 let stag = document.createElement('script');
-stag.src = `${location.hash.substr(1) || 'dataBuddy'}.js`;
+stag.src = `timelines/${location.hash.substr(1) || 'dataBuddy'}.js`;
 stag.onload = () => { show(data); };
 document.body.appendChild(stag);
 </script>
