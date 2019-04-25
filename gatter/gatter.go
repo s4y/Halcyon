@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/go-ble/ble"
+	"github.com/go-ble/ble/linux"
 )
 
 var wantService = ble.MustParse("acac")
@@ -30,13 +31,43 @@ func main() {
 	}
 	addr := os.Args[1]
 
-	client, err := ble.Connect(context.Background(), func(a ble.Advertisement) bool {
-		return a.Addr().String() == addr
-	})
+	fmt.Printf("Alive?!?!?!\n")
+
+	device, err := linux.NewDevice(ble.OptCentralRole())
+	chkErr(err)
+	ble.SetDefaultDevice(device)
+	fmt.Printf("%#v\n", device)
+
+	client, err := ble.Dial(context.Background(), ble.NewAddr(addr))
+	// client, err := ble.Connect(context.Background(), func(a ble.Advertisement) bool {
+	// 	for _, service := range a.Services() {
+	// 		if service.Equal(wantService) {
+	// 			return true
+	// 		}
+	// 		fmt.Printf("Non-matching service: %v\n", service)
+	// 	}
+	// 	return false
+	// })
 	chkErr(err)
 
 	profile, err := client.DiscoverProfile(false)
 	chkErr(err)
+
+	fmt.Printf("%#v\n", profile)
+
+	for _, want := range notifyCharacteristics {
+		onChange := func(val []byte) {
+			fmt.Printf("update for characteristic %v: %#v\n", want, val)
+		}
+		characteristic, _ := profile.Find(ble.NewCharacteristic(want)).(*ble.Characteristic)
+		fmt.Printf("got %#v\n", characteristic)
+		err = client.Subscribe(characteristic, false, onChange)
+		chkErr(err)
+		val, err := client.ReadCharacteristic(characteristic)
+		chkErr(err)
+		onChange(val)
+	}
+	select {}
 
 	for _, service := range profile.Services {
 		if service.UUID.Equal(wantService) {
