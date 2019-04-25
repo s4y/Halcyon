@@ -1,22 +1,20 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"os"
 
-	"github.com/go-ble/ble"
-	"github.com/go-ble/ble/linux"
+	"github.com/godbus/dbus"
+	ble "github.com/muka/go-bluetooth/api"
 )
 
-var wantService = ble.MustParse("acac")
-
-var notifyCharacteristics = []ble.UUID{
-	ble.MustParse("ac00"),
-	ble.MustParse("ac20"),
-	ble.MustParse("aced"),
-}
+// var wantService = ble.MustParse("acac")
+//
+// var notifyCharacteristics = []ble.UUID{
+// 	ble.MustParse("ac00"),
+// 	ble.MustParse("ac20"),
+// 	ble.MustParse("aced"),
+// }
 
 func chkErr(err error) {
 	if err != nil {
@@ -31,58 +29,58 @@ func main() {
 	}
 	addr := os.Args[1]
 
-	fmt.Printf("Alive?!?!?!\n")
-
-	device, err := linux.NewDevice(ble.OptCentralRole())
+	dev, err := ble.GetDeviceByAddress(addr)
 	chkErr(err)
-	ble.SetDefaultDevice(device)
-	fmt.Printf("%#v\n", device)
 
-	client, err := ble.Dial(context.Background(), ble.NewAddr(addr))
-	// client, err := ble.Connect(context.Background(), func(a ble.Advertisement) bool {
-	// 	for _, service := range a.Services() {
-	// 		if service.Equal(wantService) {
-	// 			return true
+	err = dev.Connect()
+	chkErr(err)
+
+	// fmt.Printf("Got device %v\n", dev)
+
+	// b00fchar, err := dev.GetCharByUUID("0000B00F-0000-1000-8000-00805F9B34FB")
+	// chkErr(err)
+
+	// b00fch, err := b00fchar.Register()
+	// go func() {
+	// 	for {
+	// 		msg := <-b00fch
+
+	// 		if msg == nil {
+	// 			return
 	// 		}
-	// 		fmt.Printf("Non-matching service: %v\n", service)
+
+	// 		fmt.Printf("b00f Message %v\n", msg)
 	// 	}
-	// 	return false
-	// })
+	// }()
+
+	// b00fchar.StartNotify()
+
+	char, err := dev.GetCharByUUID("0000ACED-0000-1000-8000-00805F9B34FB")
+	chkErr(err)
+	// fmt.Printf("Got char %v\n", char)
+
+	ch, err := char.Register()
 	chkErr(err)
 
-	profile, err := client.DiscoverProfile(false)
+	err = char.StartNotify()
 	chkErr(err)
 
-	fmt.Printf("%#v\n", profile)
+	_, err = char.ReadValue(nil)
+	chkErr(err)
+	// fmt.Printf("Got value %v\n", val)
 
-	for _, want := range notifyCharacteristics {
-		onChange := func(val []byte) {
-			fmt.Printf("update for characteristic %v: %#v\n", want, val)
+	for {
+		msg := <-ch
+
+		if msg == nil {
+			return
 		}
-		characteristic, _ := profile.Find(ble.NewCharacteristic(want)).(*ble.Characteristic)
-		fmt.Printf("got %#v\n", characteristic)
-		err = client.Subscribe(characteristic, false, onChange)
-		chkErr(err)
-		val, err := client.ReadCharacteristic(characteristic)
-		chkErr(err)
-		onChange(val)
-	}
-	select {}
 
-	for _, service := range profile.Services {
-		if service.UUID.Equal(wantService) {
-			for _, characteristic := range service.Characteristics {
-				for _, want := range notifyCharacteristics {
-					if characteristic.UUID.Equal(want) {
-						log.Println(client.ReadCharacteristic(characteristic))
-						chkErr(client.Subscribe(characteristic, false, func(req []byte) {
-							log.Println(characteristic.UUID, " changed to ", req)
-						}))
-					}
-				}
-			}
+		body := msg.Body[1].(map[string]dbus.Variant)
+
+		if val, ok := body["Value"]; ok {
+			buf := val.Value().([]uint8)
+			fmt.Printf("Change to %02X%02X\n", buf[0], buf[1])
 		}
 	}
-
-	<-client.Disconnected()
 }
