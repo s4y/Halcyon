@@ -53,8 +53,7 @@ function show(data) {
 	}
 }
 
-let stag = document.createElement('script');
-stag.src = `timelines/${location.hash.substr(1) || 'dataBuddy'}.js`;
-stag.onload = () => { show(data); };
-document.body.appendChild(stag);
+fetch(`timelines/${location.hash.substr(1) || 'dataBuddy'}.txt`)
+  .then(r => r.text())
+  .then(data => show(data));
 </script>
